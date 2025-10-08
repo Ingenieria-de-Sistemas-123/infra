@@ -5,16 +5,18 @@ Below is the current component diagram for our microservices architecture:
 
 ```mermaid
 flowchart LR
+  %% External clients
   subgraph Client[UI futura / Postman]
   end
 
-  Client -->|JWT| BFF[API Gateway/BFF]
+  Client -->|JWT| BFF[API Gateway / BFF]
 
+  %% Core microservices
   subgraph Core
-    SN[snippet-service]
-    LG[language-service]
-    TR[test-runner-service]
-    JB[jobs-orchestrator]
+    SN[Snippet Service]
+    LG[Language Service]
+    TR[Test Runner Service]
+    JB[Jobs Orchestrator]
   end
 
   BFF --> SN
@@ -24,51 +26,18 @@ flowchart LR
   SN -- "SnippetUpdated evt" --> TR
   LG -- "ParserVersionChanged evt" --> JB
 
-  subgraph Infra
-    PG[(Postgres)]
-    S3[(S3/MinIO)]
+  %% Infrastructure
+  subgraph Infra[Infrastructure]
+    PG[(PostgreSQL)]
+    S3[(S3 / MinIO)]
     RD[(Redis)]
-    MQ[[RabbitMQ/SQS]]
-    AUTH[(Auth0/IdP)]
+    MQ[(RabbitMQ / SQS)]
+    AUTH[(Auth0 / IdP)]
   end
 
-  SN -- CRUD/versión/compartir --> PG
-  SN -- artefactos --> S3
-  TR -- resultados --> PG
-  JB -- colas --> MQ
-  LG -- cache --> RD
-  BFF --> AUTH
-flowchart LR
-  subgraph Client[UI futura / Postman]
-  end
-
-  Client -->|JWT| BFF[API Gateway/BFF]
-
-  subgraph Core
-    SN[snippet-service]
-    LG[language-service]
-    TR[test-runner-service]
-    JB[jobs-orchestrator]
-  end
-
-  BFF --> SN
-  BFF --> LG
-  BFF --> TR
-  JB --> LG
-  SN -- "SnippetUpdated evt" --> TR
-  LG -- "ParserVersionChanged evt" --> JB
-
-  subgraph Infra
-    PG[(Postgres)]
-    S3[(S3/MinIO)]
-    RD[(Redis)]
-    MQ[[RabbitMQ/SQS]]
-    AUTH[(Auth0/IdP)]
-  end
-
-  SN -- CRUD/versión/compartir --> PG
-  SN -- artefactos --> S3
-  TR -- resultados --> PG
-  JB -- colas --> MQ
-  LG -- cache --> RD
+  SN --> PG
+  SN --> S3
+  TR --> PG
+  JB --> MQ
+  LG --> RD
   BFF --> AUTH
