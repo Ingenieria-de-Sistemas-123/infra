@@ -51,6 +51,7 @@ flowchart LR
   JB --> MQ
   LG --> RD
   BFF --> AUTH
+```
 ````
 
 ---
