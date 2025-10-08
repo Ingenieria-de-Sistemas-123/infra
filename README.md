@@ -1,7 +1,6 @@
 # infra
 ## System Architecture
 
-````markdown
 # Snippet Searcher – Infrastructure
 
 This repository contains the **infrastructure and architecture** for the *Snippet Searcher* platform.  
@@ -52,7 +51,6 @@ flowchart LR
   LG --> RD
   BFF --> AUTH
 ```
-````
 
 ---
 
