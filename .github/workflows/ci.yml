@@ -15,7 +15,7 @@ jobs:
       packages: read
 
     env:
-      COMPOSE_FILE: docker-compose.yml
+      COMPOSE_FILE: docker-compose.dev.yml
 
     steps:
       - name: Checkout
