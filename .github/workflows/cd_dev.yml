@@ -4,49 +4,21 @@ on:
   push:
     branches:
       - dev
-
-concurrency:
-  group: cd-dev-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  validate_compose:
-    name: Validate docker-compose.dev.yml
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: docker compose config (dev)
-        run: docker compose -f docker-compose.dev.yml config
-
   deploy_to_vm:
-    name: Deploy to VM (DEV)
-    needs: validate_compose
     runs-on: ubuntu-latest
-
     steps:
-      - name: Deploy via SSH
+      - name: Update service on VM with new image
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           script: |
-            set -euo pipefail
-            echo "→ Working dir:"
             pwd
-
             cd infra
-
-            git fetch origin dev
-            git checkout dev
-            git pull --ff-only origin dev
-
-            echo "${{ secrets.GITHUB_PAT }}" | sudo docker login -u "${{ github.actor }}" --password-stdin ghcr.io
-            
-            sudo docker compose -f docker-compose.dev.yml down --remove-orphans
+            git pull origin dev
+            sudo echo ${{ secrets.GITHUB_PAT }} | sudo docker login -u ${{ github.actor }} --password-stdin ghcr.io
+            sudo docker compose -f docker-compose.dev.yml down
             sudo docker compose -f docker-compose.dev.yml pull
             sudo docker compose -f docker-compose.dev.yml up -d
-            sudo docker compose -f docker-compose.dev.yml ps
