@@ -21,10 +21,8 @@ jobs:
             pwd
             cd infra
             git pull origin dev
-            sudo echo ${{ secrets.GITHUB_PAT }} | sudo docker login -u ${{ github.actor }} --password-stdin ghcr.io
+            sudo echo ${{ secrets.GH_PAT }} | sudo docker login -u ${{ github.actor }} --password-stdin ghcr.io
             sudo docker compose -f docker-compose.dev.yml down
             sudo docker compose -f docker-compose.dev.yml pull
             sudo docker compose -f docker-compose.dev.yml up -d
             
-            
-            #si
