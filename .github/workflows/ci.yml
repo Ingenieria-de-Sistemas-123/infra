@@ -69,6 +69,14 @@ jobs:
             fi
             sleep 2
           done
+          
+          echo "Waiting for language-service on :8082 ..."
+          for i in {1..60}; do
+            if curl -fsS http://localhost:8082/actuator/health | grep -q '"status":"UP"'; then
+              echo "permission-service UP"; break
+            fi
+            sleep 2
+          done
 
       - name: Show logs on failure
         if: failure()
@@ -77,6 +85,7 @@ jobs:
           docker compose logs --no-color --timestamps snippet-db || true
           docker compose logs --no-color --timestamps snippet-service || true
           docker compose logs --no-color --timestamps language-service || true
+          docker compose logs --no-color --timestamps permission-service || true
 
       - name: Down stack
         if: always()
