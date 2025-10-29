@@ -21,7 +21,7 @@ services:
     networks: [ss-dev]
 
   snippet-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/snippet-service:latest
+    image: ghcr.io/ingenieria-de-sistemas-123/snippet-service:dev
     container_name: snippet-service-dev
     depends_on:
       snippet-db:
@@ -43,7 +43,7 @@ services:
     networks: [ss-dev]
 
   language-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/language-service:latest
+    image: ghcr.io/ingenieria-de-sistemas-123/language-service:dev
     container_name: language-service-dev
     env_file: [.env.dev]
     environment:
@@ -57,6 +57,22 @@ services:
       start_period: 15s
     restart: unless-stopped
     networks: [ss-dev]
+
+  permission-service:
+      image: ghcr.io/ingenieria-de-sistemas-123/permission-service:dev
+      container_name: permission-service-dev
+      env_file: [.env.dev]
+      environment:
+        SPRING_PROFILES_ACTIVE: docker
+      ports: ["8083:8083"]
+      healthcheck:
+        test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health | grep UP || exit 1"]
+        interval: 5s
+        timeout: 3s
+        retries: 30
+        start_period: 15s
+      restart: unless-stopped
+      networks: [ss-dev]
 
 networks:
   ss-dev:
