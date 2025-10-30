@@ -24,17 +24,15 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script_stop: true
           command_timeout: 20m
+          debug: true             # 👈 imprime stdout/stderr remoto
           script: |
-            set -euo pipefail
-
+            set -xeuo pipefail    # 👈 traza de comandos (x)
             cd "${{ secrets.DEPLOY_WORKDIR }}"
-
-            # La rama la resolvemos en el runner, NO en la VM
             BRANCH="${{ github.ref_name }}"
             if [ "$BRANCH" = "main" ]; then
-              COMPOSE_FILE="docker-compose.yml"        # prod
+              COMPOSE_FILE="docker-compose.yml"
             else
-              COMPOSE_FILE="docker-compose.dev.yml"    # dev
+              COMPOSE_FILE="docker-compose.dev.yml"
             fi
 
             echo "[cd] sync infra repo to $BRANCH"
@@ -42,13 +40,22 @@ jobs:
             git reset --hard "origin/$BRANCH"
 
             echo "[cd] using compose file: $COMPOSE_FILE"
+            pwd; ls -la
             test -f "$COMPOSE_FILE" || { echo "::error file=$COMPOSE_FILE::compose file not found"; exit 1; }
+
+            echo "[cd] versions"
+            which docker || true
+            docker --version
+            docker compose version
 
             echo "[cd] login to ghcr.io"
             docker logout ghcr.io >/dev/null 2>&1 || true
             echo "${{ secrets.GH_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
 
-            echo "[cd] deploy ($COMPOSE_FILE)"
+            echo "[cd] validate compose"
+            docker compose -f "$COMPOSE_FILE" config
+
+            echo "[cd] pull & up"
             docker compose -f "$COMPOSE_FILE" pull
             docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
