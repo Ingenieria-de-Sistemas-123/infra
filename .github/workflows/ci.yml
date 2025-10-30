@@ -47,20 +47,19 @@ jobs:
           set -euo pipefail
 
           wait_up() {
-            local name="$1" url="$2"
-            echo "Waiting for $name at $url ..."
-            for i in {1..60}; do
-              if curl -fsS "$url" | grep -q '"status":"UP"'; then
-                echo "$name UP"; return 0
-              fi
-              sleep 2
-            done
-            echo "::error::$name did not become UP"; return 1
-          }
-
-          wait_up "permission-service" http://localhost:8080/actuator/health
-          wait_up "snippet-service"    http://localhost:8081/actuator/health
-          wait_up "language-service"   http://localhost:8082/actuator/health
+              local name="$1" url="$2"
+              echo "→ waiting $name at $url ..."
+              for i in $(seq 1 40); do
+                if curl -fsS "$url" | grep -q '"status":"UP"'; then
+                  echo "✓ $name UP"; return 0
+                fi
+                sleep 2
+              done
+              echo "::error::$name did not become UP"; return 1
+            }
+            wait_up "permission-service" "http://localhost:8080/actuator/health"
+            wait_up "snippet-service"    "http://localhost:8081/actuator/health"
+            wait_up "language-service"   "http://localhost:8082/actuator/health"
 
       - name: Show logs on failure
         if: failure()
