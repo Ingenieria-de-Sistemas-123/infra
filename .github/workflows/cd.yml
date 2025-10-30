@@ -27,12 +27,13 @@ jobs:
           debug: true
           script: |
             set -xeuo pipefail
+
             cd "${{ secrets.DEPLOY_WORKDIR }}"
 
             BRANCH="${{ github.ref_name }}"
-            COMPOSE_FILE="docker-compose.dev.yml"
-            [ "$BRANCH" = "main" ] && COMPOSE_FILE="docker-compose.yml"  # safe with set -e
-
+            SUFFIX="${BRANCH#main}"
+            DOTSUFFIX="${SUFFIX:+.dev}"
+            COMPOSE_FILE="docker-compose${DOTSUFFIX}.yml"
             echo "[cd] branch=$BRANCH compose=$COMPOSE_FILE"
 
             echo "[cd] sync infra repo to $BRANCH"
