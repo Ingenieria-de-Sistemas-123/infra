@@ -24,16 +24,18 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script_stop: true
           command_timeout: 20m
-          debug: true             # 👈 imprime stdout/stderr remoto
+          debug: true
           script: |
-            set -xeuo pipefail    # 👈 traza de comandos (x)
+            set -xeuo pipefail
+
             cd "${{ secrets.DEPLOY_WORKDIR }}"
+
             BRANCH="${{ github.ref_name }}"
-            if [ "$BRANCH" = "main" ]; then
-              COMPOSE_FILE="docker-compose.yml"
-            else
-              COMPOSE_FILE="docker-compose.dev.yml"
-            fi
+            case "$BRANCH" in
+              main) COMPOSE_FILE="docker-compose.yml" ;;
+              *)    COMPOSE_FILE="docker-compose.dev.yml" ;;
+            esac
+            echo "[cd] branch=$BRANCH compose=$COMPOSE_FILE"
 
             echo "[cd] sync infra repo to $BRANCH"
             git fetch --all --prune
@@ -44,7 +46,6 @@ jobs:
             test -f "$COMPOSE_FILE" || { echo "::error file=$COMPOSE_FILE::compose file not found"; exit 1; }
 
             echo "[cd] versions"
-            which docker || true
             docker --version
             docker compose version
 
@@ -71,7 +72,6 @@ jobs:
               done
               echo "::error::$name did not become UP"; return 1
             }
-
             wait_up "permission-service" "http://localhost:8080/actuator/health"
             wait_up "snippet-service"    "http://localhost:8081/actuator/health"
             wait_up "language-service"   "http://localhost:8082/actuator/health"
