@@ -29,19 +29,20 @@ jobs:
 
             cd "${{ secrets.DEPLOY_WORKDIR }}"
 
-            BRANCH="${GITHUB_REF_NAME}"
+            # La rama la resolvemos en el runner, NO en la VM
+            BRANCH="${{ github.ref_name }}"
             if [ "$BRANCH" = "main" ]; then
               COMPOSE_FILE="docker-compose.yml"        # prod
             else
               COMPOSE_FILE="docker-compose.dev.yml"    # dev
             fi
 
-            echo "[cd] using compose file: $COMPOSE_FILE"
-            test -f "$COMPOSE_FILE" || { echo "::error file=$COMPOSE_FILE::compose file not found"; exit 1; }
-
             echo "[cd] sync infra repo to $BRANCH"
             git fetch --all --prune
             git reset --hard "origin/$BRANCH"
+
+            echo "[cd] using compose file: $COMPOSE_FILE"
+            test -f "$COMPOSE_FILE" || { echo "::error file=$COMPOSE_FILE::compose file not found"; exit 1; }
 
             echo "[cd] login to ghcr.io"
             docker logout ghcr.io >/dev/null 2>&1 || true
@@ -50,14 +51,12 @@ jobs:
             echo "[cd] deploy ($COMPOSE_FILE)"
             docker compose -f "$COMPOSE_FILE" pull
             docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
-            # Opción B (si tu compose soporta --pull always):
-            # docker compose -f "$COMPOSE_FILE" up -d --pull always --remove-orphans
 
             echo "[cd] wait for services"
             wait_up() {
               local name="$1" url="$2"
               echo "→ waiting $name at $url ..."
-              for i in {1..40}; do
+              for i in $(seq 1 40); do
                 if curl -fsS "$url" | grep -q '"status":"UP"'; then
                   echo "✓ $name UP"; return 0
                 fi
