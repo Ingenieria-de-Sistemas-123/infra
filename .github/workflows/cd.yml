@@ -50,7 +50,7 @@ jobs:
 
             echo "[cd] login to ghcr.io"
             docker logout ghcr.io >/dev/null 2>&1 || true
-            echo "${{ secrets.GH_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
 
             echo "[cd] validate compose"
             docker compose -f "$COMPOSE_FILE" config
