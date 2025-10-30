@@ -31,7 +31,7 @@ jobs:
           username: ${{ secrets.GHCR_READ_USER || github.actor }}
           password: ${{ secrets.GHCR_READ_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Create .env for CI
+      - name: Create .env.dev for CI
         run: |
           cat > .env << 'EOF'
           DB_NAME=snippet-db
