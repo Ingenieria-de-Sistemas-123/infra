@@ -58,7 +58,6 @@ jobs:
             echo "::error::$name did not become UP"; return 1
           }
 
-          # Ajustá endpoints si no usan actuator:
           wait_up "permission-service" http://localhost:8080/actuator/health
           wait_up "snippet-service"    http://localhost:8081/actuator/health
           wait_up "language-service"   http://localhost:8082/actuator/health
