@@ -2,20 +2,21 @@ name: CI (infra)
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ dev, main ]
   pull_request:
-    branches: [ main, dev ]
+    branches: [ dev, main ]
 
 jobs:
   compose-ci:
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
       packages: read
 
     env:
       COMPOSE_FILE: docker-compose.dev.yml
+      OWNER: ingenieria-de-sistemas-123
+      TAG: dev
 
     steps:
       - name: Checkout
@@ -28,18 +29,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ secrets.GHCR_READ_USER || github.actor }}
-          password: ${{ secrets.GHCR_READ_TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Create .env for CI
-        run: |
-          cat > .env << 'EOF'
-          DB_NAME=snippet-db
-          DB_USERNAME=postgres
-          DB_PASSWORD=postgres
-          EOF
-          echo "Created .env:"
-          cat .env
+          username: ${{ secrets.GHCR_USER || github.actor }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Validate docker-compose syntax
         run: docker compose config
@@ -48,44 +39,38 @@ jobs:
         run: docker compose pull
 
       - name: Start stack
-        run: docker compose up -d
+        run: docker compose up -d --remove-orphans
 
       - name: Wait for services (HTTP probes)
         shell: bash
         run: |
-          set -e
-          echo "Waiting for snippet-service on :8081 ..."
-          for i in {1..60}; do
-            if curl -fsS http://localhost:8081/actuator/health | grep -q '"status":"UP"'; then
-              echo "snippet-service UP"; break
-            fi
-            sleep 2
-          done
+          set -euo pipefail
 
-          echo "Waiting for language-service on :8082 ..."
-          for i in {1..60}; do
-            if curl -fsS http://localhost:8082/actuator/health | grep -q '"status":"UP"'; then
-              echo "language-service UP"; break
-            fi
-            sleep 2
-          done
-          
-          echo "Waiting for language-service on :8082 ..."
-          for i in {1..60}; do
-            if curl -fsS http://localhost:8082/actuator/health | grep -q '"status":"UP"'; then
-              echo "permission-service UP"; break
-            fi
-            sleep 2
-          done
+          wait_up() {
+            local name="$1" url="$2"
+            echo "Waiting for $name at $url ..."
+            for i in {1..60}; do
+              if curl -fsS "$url" | grep -q '"status":"UP"'; then
+                echo "$name UP"; return 0
+              fi
+              sleep 2
+            done
+            echo "::error::$name did not become UP"; return 1
+          }
+
+          wait_up "permission-service" http://localhost:8080/actuator/health
+          wait_up "snippet-service"    http://localhost:8081/actuator/health
+          wait_up "language-service"   http://localhost:8082/actuator/health
 
       - name: Show logs on failure
         if: failure()
         run: |
           docker compose ps
+          docker compose logs --no-color --timestamps permission-db || true
           docker compose logs --no-color --timestamps snippet-db || true
+          docker compose logs --no-color --timestamps permission-service || true
           docker compose logs --no-color --timestamps snippet-service || true
           docker compose logs --no-color --timestamps language-service || true
-          docker compose logs --no-color --timestamps permission-service || true
 
       - name: Down stack
         if: always()
