@@ -31,9 +31,11 @@ jobs:
 
             BRANCH="${GITHUB_REF_NAME}"
             if [ "$BRANCH" = "main" ]; then
-              COMPOSE_FILE="docker-compose.yml"        # prod
+              COMPOSE_FILE="docker-compose.prod.yml"
+              ENV_FILE=".env.prod"
             else
-              COMPOSE_FILE="docker-compose.dev.yml"    # dev
+              COMPOSE_FILE="docker-compose.dev.yml"
+              ENV_FILE=".env.dev.dev"
             fi
 
             echo "[cd] using compose file: $COMPOSE_FILE"
@@ -43,15 +45,28 @@ jobs:
             git fetch --all --prune
             git reset --hard "origin/$BRANCH"
 
+            echo "[cd] writing $ENV_FILE from secrets"
+            : > "$ENV_FILE"
+            echo "DB_NAME=${{ secrets.DB_NAME }}" >> "$ENV_FILE"
+            echo "DB_USERNAME=${{ secrets.DB_USERNAME }}" >> "$ENV_FILE"
+            echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> "$ENV_FILE"
+            echo "DB_PERMISSION_NAME=${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
+            echo "DB_PERMISSION_USER=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
+            echo "DB_PERMISSION_PASSWORD=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/${{ secrets.DB_NAME }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_USERNAME_SNIPPET=${{ secrets.DB_USERNAME }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_PASSWORD_SNIPPET=${{ secrets.DB_PASSWORD }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_URL_PERMISSIONDB=jdbc:postgresql://permission-db:5432/${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_USERNAME_PERMISSIONDB=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
+
             echo "[cd] login to ghcr.io"
             docker logout ghcr.io >/dev/null 2>&1 || true
             echo "${{ secrets.GH_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
 
             echo "[cd] deploy ($COMPOSE_FILE)"
             docker compose -f "$COMPOSE_FILE" pull
-            docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
-            # Opción B (si tu compose soporta --pull always):
-            # docker compose -f "$COMPOSE_FILE" up -d --pull always --remove-orphans
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
 
             echo "[cd] wait for services"
             wait_up() {
@@ -66,9 +81,11 @@ jobs:
               echo "::error::$name did not become UP"; return 1
             }
 
-            wait_up "permission-service" "http://localhost:8080/actuator/health"
-            wait_up "snippet-service"    "http://localhost:8081/actuator/health"
-            wait_up "language-service"   "http://localhost:8082/actuator/health"
+            if [ "$BRANCH" = "main" ]; then
+              wait_up "reverse-proxy" "http://localhost/actuator/health"
+            else
+              wait_up "reverse-proxy-dev" "http://localhost/actuator/health"
+            fi
 
             echo "[cd] state"
             docker compose -f "$COMPOSE_FILE" ps
