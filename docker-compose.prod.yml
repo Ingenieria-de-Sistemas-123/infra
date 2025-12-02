@@ -1,0 +1,141 @@
+name: ss-infra-prod
+
+services:
+  snippet-db:
+    image: postgres:16-alpine
+    container_name: snippet-db
+    env_file: [.env.prod]
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    expose: ["5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - pg_data_prod:/var/lib/postgresql/data
+    networks: [ss-prod]
+
+  permission-db:
+    image: postgres:16
+    container_name: permission-db
+    env_file: [.env.prod]
+    environment:
+      POSTGRES_DB: ${DB_PERMISSION_NAME}
+      POSTGRES_USER: ${DB_PERMISSION_USER}
+      POSTGRES_PASSWORD: ${DB_PERMISSION_PASSWORD}
+    expose: ["5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - permission_pg_data_prod:/var/lib/postgresql/data
+    networks: [ss-prod]
+
+  snippet-service:
+    image: ghcr.io/ingenieria-de-sistemas-123/snippet-service:prod
+    container_name: snippet-service
+    depends_on:
+      snippet-db:
+        condition: service_healthy
+    env_file: [.env.prod]
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://snippet-db:5432/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+    expose: ["8080"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
+    networks: [ss-prod]
+
+  language-service:
+    image: ghcr.io/ingenieria-de-sistemas-123/language-service:prod
+    container_name: language-service
+    env_file: [.env.prod]
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    expose: ["8080"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
+    networks: [ss-prod]
+
+  permission-service:
+      image: ghcr.io/ingenieria-de-sistemas-123/permission-service:prod
+      container_name: permission-service
+      env_file: [.env.prod]
+      environment:
+        SPRING_PROFILES_ACTIVE: docker
+        SPRING_DATASOURCE_URL: jdbc:postgresql://permission-db:5432/${DB_PERMISSION_NAME}
+        SPRING_DATASOURCE_USERNAME: ${DB_PERMISSION_USER}
+        SPRING_DATASOURCE_PASSWORD: ${DB_PERMISSION_PASSWORD}
+      depends_on:
+        permission-db:
+          condition: service_healthy
+      expose: ["8080"]
+      healthcheck:
+        test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+        interval: 5s
+        timeout: 3s
+        retries: 30
+        start_period: 15s
+      restart: unless-stopped
+      networks: [ss-prod]
+
+  reverse-proxy:
+    image: nginx:alpine
+    container_name: reverse-proxy
+    depends_on:
+      snippet-service:
+        condition: service_healthy
+      language-service:
+        condition: service_healthy
+      permission-service:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_www_prod:/var/www/certbot
+      - letsencrypt_prod:/etc/letsencrypt
+    networks: [ss-prod]
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot
+    depends_on:
+      - reverse-proxy
+    volumes:
+      - certbot_www_prod:/var/www/certbot
+      - letsencrypt_prod:/etc/letsencrypt
+    entrypoint: /bin/sh
+    command: -c "trap exit TERM; while :; do sleep 12h & wait $!; certbot renew --webroot -w /var/www/certbot --quiet; done"
+    networks: [ss-prod]
+
+networks:
+  ss-prod:
+
+volumes:
+  pg_data_prod:
+  permission_pg_data_prod:
+  certbot_www_prod:
+  letsencrypt_prod:
