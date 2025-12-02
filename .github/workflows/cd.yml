@@ -25,68 +25,87 @@ jobs:
           script_stop: true
           command_timeout: 20m
           script: |
+            bash
             set -Eeuo pipefail
             trap 'echo "::error::failed at line $LINENO"; exit 1' ERR
             set -x
-
-            cd "${{ secrets.DEPLOY_WORKDIR }}"
-
-            BRANCH="${{ github.ref_name }}"
+            
+            cd '${{ secrets.DEPLOY_WORKDIR }}'
+            
+            BRANCH='${{ github.ref_name }}'
             if [ "$BRANCH" = "main" ]; then
-              COMPOSE_FILE="docker-compose.prod.yml"
-              ENV_FILE=".env.prod"
+            COMPOSE_FILE='docker-compose.prod.yml'
+            ENV_FILE='.env.prod'
             else
-              COMPOSE_FILE="docker-compose.dev.yml"
-              ENV_FILE=".env.dev"
+            COMPOSE_FILE='docker-compose.dev.yml'
+            ENV_FILE='.env.dev'
             fi
             
-            echo "[cd] sync infra repo to $BRANCH"
+            echo '[cd] sync infra repo to' "$BRANCH"
             git fetch --all --prune
             git reset --hard "origin/$BRANCH"
-
-            echo "[cd] using compose file: $COMPOSE_FILE"
+            
+            echo '[cd] using compose file:' "$COMPOSE_FILE"
             test -f "$COMPOSE_FILE" || { echo "::error file=$COMPOSE_FILE::compose file not found"; exit 1; }
-
-            echo "[cd] writing $ENV_FILE from secrets"
+            
+            echo '[cd] writing' "$ENV_FILE" 'from secrets'
             : > "$ENV_FILE"
-            echo "DB_NAME=${{ secrets.DB_NAME }}" >> "$ENV_FILE"
-            echo "DB_USERNAME=${{ secrets.DB_USERNAME }}" >> "$ENV_FILE"
-            echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> "$ENV_FILE"
-            echo "DB_PERMISSION_NAME=${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
-            echo "DB_PERMISSION_USER=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
-            echo "DB_PERMISSION_PASSWORD=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/${{ secrets.DB_NAME }}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_USERNAME_SNIPPET=${{ secrets.DB_USERNAME }}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_PASSWORD_SNIPPET=${{ secrets.DB_PASSWORD }}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_URL_PERMISSIONDB=jdbc:postgresql://permission-db:5432/${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_USERNAME_PERMISSIONDB=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_URL=jdbc:postgresql://permission-db:5432/${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
-            echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${{ secrets.AUTH0_ISSUER }}" >> "$ENV_FILE"
-            echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}" >> "$ENV_FILE"
+            
+            DB_PERMISSION_NAME='${{ secrets.DB_PERMISSION_NAME }}'
+            DB_PERMISSION_USER='${{ secrets.DB_PERMISSION_USER }}'
+            DB_PERMISSION_PASSWORD='${{ secrets.DB_PERMISSION_PASSWORD }}'
+            
+            DB_SNIPPET_NAME='${{ secrets.DB_NAME }}'
+            DB_SNIPPET_USERNAME='${{ secrets.DB_USERNAME }}'
+            DB_SNIPPET_PASSWORD='${{ secrets.DB_PASSWORD }}'
+            
+            AUTH0_ISSUER='${{ secrets.AUTH0_ISSUER }}'
+            AUTH0_AUDIENCE='${{ secrets.AUTH0_AUDIENCE }}'
 
-            echo "[cd] login to ghcr.io"
+          # Variables para permission-db y permission-service
+            [ -n "${DB_PERMISSION_NAME}" ] && echo "DB_PERMISSION_NAME=${DB_PERMISSION_NAME}" >> "$ENV_FILE"
+            [ -n "${DB_PERMISSION_USER}" ] && echo "DB_PERMISSION_USER=${DB_PERMISSION_USER}" >> "$ENV_FILE"
+            [ -n "${DB_PERMISSION_PASSWORD}" ] && echo "DB_PERMISSION_PASSWORD=${DB_PERMISSION_PASSWORD}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_URL_PERMISSIONDB=jdbc:postgresql://permission-db:5432/${DB_PERMISSION_NAME:-permission_db}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_USERNAME_PERMISSIONDB=${DB_PERMISSION_USER:-postgres}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=${DB_PERMISSION_PASSWORD:-postgres}" >> "$ENV_FILE"
+            [ -n "${AUTH0_ISSUER}" ] && echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${AUTH0_ISSUER}" >> "$ENV_FILE"
+            [ -n "${AUTH0_AUDIENCE}" ] && echo "AUTH0_AUDIENCE=${AUTH0_AUDIENCE}" >> "$ENV_FILE"
+
+            # Variables para snippet-db y snippet-service
+            [ -n "${DB_SNIPPET_NAME}" ] && echo "DB_SNIPPET_NAME=${DB_SNIPPET_NAME}" >> "$ENV_FILE"
+            [ -n "${DB_SNIPPET_USERNAME}" ] && echo "DB_SNIPPET_USERNAME=${DB_SNIPPET_USERNAME}" >> "$ENV_FILE"
+            [ -n "${DB_SNIPPET_PASSWORD}" ] && echo "DB_SNIPPET_PASSWORD=${DB_SNIPPET_PASSWORD}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/${DB_SNIPPET_NAME:-snippet-db}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_USERNAME_SNIPPET=${DB_SNIPPET_USERNAME:-app}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_PASSWORD_SNIPPET=${DB_SNIPPET_PASSWORD:-app}" >> "$ENV_FILE"
+            
+            # Perfil y base URL (dev)
+            if [ "$ENV_FILE" = ".env.dev" ]; then
+            echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
+            echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
+            fi
+            
+            echo '[cd] login to ghcr.io'
             docker logout ghcr.io >/dev/null 2>&1 || true
-            echo "${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
-
-            compose() { docker compose "$@" || docker-compose "$@"; }
-
-            echo "[cd] deploy ($COMPOSE_FILE)"
+            echo '${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ secrets.GHCR_USER || github.actor }}' --password-stdin
+          
+            compose() { docker compose "$@" || docker-compose "$@" ; }
+          
+            echo '[cd] deploy ('"$COMPOSE_FILE"')'
             compose -f "$COMPOSE_FILE" pull
-
-            echo "[cd] compose config"
+            
+            echo '[cd] compose config'
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
-
+            
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
-
-            echo "[cd] wait for containers health"
+            
+            echo '[cd] wait for containers health'
             wait_health() {
               local name="$1"
               echo "→ esperando salud: $name"
               for i in $(seq 1 40); do
-                status="$(docker inspect -f '{{ .State.Health.Status }}' "$name" 2>/dev/null || echo starting)"
+                status="$(docker inspect -f '{{ .State.Health.Status }}' "$name" 2>/dev/null || echo 'starting')"
                 if [ "$status" = "healthy" ]; then
                   echo "✓ $name healthy"; return 0
                 fi
@@ -99,18 +118,18 @@ jobs:
             wait_health permission-service
             wait_health snippet-service
             wait_health language-service
-
-            echo "[cd] check reverse-proxy port"
+                              
+            echo '[cd] check reverse-proxy port'
             curl -fsSI http://localhost/ || curl -kfsSI https://localhost/ || { echo "::warning::reverse-proxy no respondió a localhost"; true; }
 
-            echo "[cd] state"
+            echo '[cd] state'
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
-
+            
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps permission-db || true
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps snippet-db || true
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps permission-service || true
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps snippet-service || true
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps language-service || true
-
-            echo "[cd] prune old images"
+                            
+            echo '[cd] prune old images'
             docker image prune -f
