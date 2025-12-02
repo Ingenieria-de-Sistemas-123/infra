@@ -1,3 +1,4 @@
+# yaml
 services:
   permission-service:
     image: ghcr.io/ingenieria-de-sistemas-123/permission-service:dev
@@ -27,7 +28,6 @@ services:
       POSTGRES_DB: ${DB_PERMISSION_NAME}
       POSTGRES_USER: ${DB_PERMISSION_USER}
       POSTGRES_PASSWORD: ${DB_PERMISSION_PASSWORD}
-    # Eliminamos mapeo de puertos para ocultar la DB al host
     expose: ["5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
@@ -63,7 +63,6 @@ services:
       POSTGRES_DB: ${DB_SNIPPET_NAME}
       POSTGRES_USER: ${DB_SNIPPET_USERNAME}
       POSTGRES_PASSWORD: ${DB_SNIPPET_PASSWORD}
-    # Eliminamos mapeo de puertos para ocultar la DB al host
     expose: ["5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
@@ -84,6 +83,18 @@ services:
       timeout: 3s
       retries: 30
       start_period: 15s
+
+  printscript-ui:
+    container_name: "printscript-ui"
+    image: ghcr.io/ingenieria-de-sistemas-123/printscript-ui:dev-latest
+    expose:
+      - "80"
+    environment:
+        - VITE_AUTH0_DOMAIN=${VITE_AUTH0_DOMAIN}
+        - VITE_AUTH0_CLIENT_ID=${VITE_AUTH0_CLIENT_ID}
+        - VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}
+        - VITE_AUTH0_CALLBACK_URL=${VITE_AUTH0_CALLBACK_URL}
+        - VITE_PERMISSION_BASE_URL=${VITE_PERMISSION_BASE_URL}
 
   reverse-proxy:
     image: nginx:alpine

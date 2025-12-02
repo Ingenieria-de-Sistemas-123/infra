@@ -70,6 +70,13 @@ jobs:
               echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
             fi
 
+            
+            echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_CALLBACK_URL=${{ secrets.VITE_AUTH0_CALLBACK_URL }}" >> "$ENV_FILE"
+            echo "VITE_PERMISSION_BASE_URL=${{ secrets.VITE_PERMISSION_BASE_URL }}" >> "$ENV_FILE"
+
             echo "[cd] login ghcr"
             docker logout ghcr.io >/dev/null 2>&1 || true
             echo "${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
@@ -90,7 +97,7 @@ jobs:
               for i in $(seq 1 40); do
                 status="$(docker inspect -f '{{ .State.Health.Status }}' "$name" 2>/dev/null || echo starting)"
                 if [ "$status" = "healthy" ]; then
-                  echo "✓ $name healthy"; return 0
+                  [...]
                 fi
                 sleep 2
               done
