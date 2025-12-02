@@ -91,7 +91,7 @@ services:
       - "80"
     # Ahora lee sus variables desde .env.ui (archivo generado por Actions desde los Secrets)
     env_file:
-      - .env.ui
+      - .env.dev
 
   reverse-proxy:
     image: nginx:alpine
