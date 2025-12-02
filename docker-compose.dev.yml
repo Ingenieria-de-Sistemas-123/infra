@@ -1,14 +1,14 @@
 services:
-
   permission-service:
     image: ghcr.io/ingenieria-de-sistemas-123/permission-service:dev
     container_name: permission-service
-    # Oculto puertos al host; expongo internamente 8080 para NGINX
     expose: ["8080"]
     environment:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL_PERMISSIONDB}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME_PERMISSIONDB}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD_PERMISSIONDB}
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI}
+      - AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
     depends_on:
       permission-db:
         condition: service_healthy
