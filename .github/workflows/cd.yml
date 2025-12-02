@@ -59,6 +59,9 @@ jobs:
             echo "SPRING_DATASOURCE_URL_PERMISSIONDB=jdbc:postgresql://permission-db:5432/${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
             echo "SPRING_DATASOURCE_USERNAME_PERMISSIONDB=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
             echo "SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_URL=jdbc:postgresql://permission-db:5432/${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
 
             echo "[cd] login to ghcr.io"
             docker logout ghcr.io >/dev/null 2>&1 || true
