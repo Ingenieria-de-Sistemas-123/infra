@@ -70,21 +70,12 @@ jobs:
               echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
             fi
 
-            # --- Nuevo: crear .env.ui desde Secrets para la UI ---
-            echo "[cd] writing .env.ui from secrets"
-            : > .env.ui
-            echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> .env.ui
-            echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> .env.ui
-            echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> .env.ui
-            echo "VITE_AUTH0_CALLBACK_URL=${{ secrets.VITE_AUTH0_CALLBACK_URL }}" >> .env.ui
-            echo "VITE_PERMISSION_BASE_URL=${{ secrets.VITE_PERMISSION_BASE_URL }}" >> .env.ui
-
-            # Compatibilidad: opcionalmente fusionar .env.ui en el env principal para servicios que leen de allí
-            if [ -f "$ENV_FILE" ]; then
-              echo "[cd] merging .env.ui into $ENV_FILE (compatibility)"
-              cat .env.ui >> "$ENV_FILE"
-            fi
-            # --- fin .env.ui ---
+            
+            echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_CALLBACK_URL=${{ secrets.VITE_AUTH0_CALLBACK_URL }}" >> "$ENV_FILE"
+            echo "VITE_PERMISSION_BASE_URL=${{ secrets.VITE_PERMISSION_BASE_URL }}" >> "$ENV_FILE"
 
             echo "[cd] login ghcr"
             docker logout ghcr.io >/dev/null 2>&1 || true
