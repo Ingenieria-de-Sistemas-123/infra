@@ -60,8 +60,8 @@ Precondiciones:
 Pasos:
 ```bash
 # 1. Levantar stack
-docker compose -f docker-compose.dev.yml pull
-docker compose -f docker-compose.dev.yml up -d --remove-orphans
+docker compose -f docker-compose.dev.yml --env-file .env.dev pull
+docker compose -f docker-compose.dev.yml --env-file .env.dev up -d --remove-orphans
 
 # 2. Emitir certificado inicial (solo primera vez)
 docker compose -f docker-compose.dev.yml run --rm certbot certbot certonly --webroot -w /var/www/certbot -d snippet-org-dev.duckdns.org --email ing.sistemas.123.encrypt@gmail.com --agree-tos --no-eff-email
@@ -262,7 +262,7 @@ Puedes agregarlo a un cron (cada 5 minutos) para mantener el DNS actualizado.
    ```
 
 ### 15.6 Variables de entorno
-1. Crea archivo `.env.dev.dev` si no existe con valores reales:
+1. Crea archivo `.env.dev` si no existe con valores reales (o usa Secrets):
    ```env
    DB_NAME=snippets
    DB_USERNAME=snippets_user
@@ -359,7 +359,7 @@ docker run --rm -v pg_data_prod:/data -v $(pwd):/backup alpine sh -c "tar -xzf /
 ## 17. Manejo Seguro de Secretos y Variables (.env)
 
 ### 17.1 No versionar archivos .env con credenciales
-Los archivos `.env.dev.dev` y `.env.prod` no deben subirse al repo si contienen credenciales reales. Usa GitHub Actions Secrets para inyectarlos en la VM en runtime.
+Los archivos `.env.dev` y `.env.prod` no deben subirse al repo si contienen credenciales reales. Usa GitHub Actions Secrets para inyectarlos en la VM en runtime.
 
 ### 17.2 GitHub Actions Secrets usados (ejemplo)
 Configura en Settings > Secrets and variables > Actions:
@@ -368,7 +368,7 @@ Configura en Settings > Secrets and variables > Actions:
 - `VM_HOST`, `VM_USER`, `DEPLOY_SSH_KEY` (llave privada de despliegue)
 - `GH_PAT` (token para pull de imágenes si necesario)
 
-El workflow CD genera un archivo `.env.prod` o `.env.dev.dev` dinámico antes de `docker compose up`. No deja rastros en el repo.
+El workflow CD genera un archivo `.env.prod` o `.env.dev` dinámico antes de `docker compose up`. No deja rastros en el repo.
 
 ### 17.3 Rotación de secretos
 - Cambia credenciales DB cada X meses y vuelve a actualizar secrets.
@@ -395,6 +395,6 @@ Agrega prune controlado (ya está en CD). Considera un job mensual que respalde 
 
 ### 17.7 Archivos de ejemplo .env
 Se agregaron plantillas:
-- `.env.dev.dev.example`
+- `.env.dev.example`
 - `.env.prod.example`
-Copia y renombra la que corresponda, reemplazando valores `CHANGEME`. No subas los archivos reales con credenciales. Preferí usar Secrets en CI/CD.
+Copia y renombra la que corresponda (`.env.dev` / `.env.prod`), reemplazando valores `CHANGEME`. No subas los archivos reales con credenciales. Preferí usar Secrets en CI/CD.
