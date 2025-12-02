@@ -83,6 +83,9 @@ services:
       env_file: [.env.prod]
       environment:
         SPRING_PROFILES_ACTIVE: docker
+        SPRING_DATASOURCE_URL: jdbc:postgresql://permission-db:5432/${DB_PERMISSION_NAME}
+        SPRING_DATASOURCE_USERNAME: ${DB_PERMISSION_USER}
+        SPRING_DATASOURCE_PASSWORD: ${DB_PERMISSION_PASSWORD}
       depends_on:
         permission-db:
           condition: service_healthy
