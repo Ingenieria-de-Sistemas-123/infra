@@ -19,13 +19,14 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script_stop: true
           command_timeout: 20m
+          debug: true
           script: |
-            set -euo pipefail
+            set -xeuo pipefail
 
             cd "${{ secrets.DEPLOY_WORKDIR }}"
 
@@ -62,9 +63,12 @@ jobs:
 
             echo "[cd] login to ghcr.io"
             docker logout ghcr.io >/dev/null 2>&1 || true
-            echo "${{ secrets.GH_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
 
-            echo "[cd] deploy ($COMPOSE_FILE)"
+            echo "[cd] validate compose"
+            docker compose -f "$COMPOSE_FILE" config
+
+            echo "[cd] pull & up"
             docker compose -f "$COMPOSE_FILE" pull
             docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
 
@@ -72,7 +76,7 @@ jobs:
             wait_up() {
               local name="$1" url="$2"
               echo "→ waiting $name at $url ..."
-              for i in {1..40}; do
+              for i in $(seq 1 40); do
                 if curl -fsS "$url" | grep -q '"status":"UP"'; then
                   echo "✓ $name UP"; return 0
                 fi
