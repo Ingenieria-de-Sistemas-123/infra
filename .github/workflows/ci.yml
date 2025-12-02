@@ -12,88 +12,102 @@ jobs:
     permissions:
       contents: read
       packages: read
-
     env:
       COMPOSE_FILE: docker-compose.dev.yml
-      OWNER: ingenieria-de-sistemas-123
-      TAG: dev
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Preparar archivo de entorno (.env.ci.dev) sin exponer secrets
+        run: |
+          set -euo pipefail
+          file=".env.ci.dev"
+          : > "$file"
 
-      - name: Login to GHCR (read)
+          # Fallbacks locales (CI) si no hay Secrets (evitan warnings)
+          DB_PERMISSION_NAME="${{ secrets.DB_PERMISSION_NAME || 'permission_db' }}"
+          DB_PERMISSION_USER="${{ secrets.DB_PERMISSION_USER || 'postgres' }}"
+          DB_PERMISSION_PASSWORD="${{ secrets.DB_PERMISSION_PASSWORD || 'postgres' }}"
+          DB_SNIPPET_NAME="${{ secrets.DB_NAME || 'snippet_db' }}"
+          DB_SNIPPET_USERNAME="${{ secrets.DB_USERNAME || 'postgres' }}"
+          DB_SNIPPET_PASSWORD="${{ secrets.DB_PASSWORD || 'postgres' }}"
+          AUTH0_ISSUER="${{ secrets.AUTH0_ISSUER || 'https://example-tenant.auth0.com/' }}"
+          AUTH0_AUDIENCE="${{ secrets.AUTH0_AUDIENCE || 'https://snippet-api' }}"
+
+          {
+            echo "DB_PERMISSION_NAME=${DB_PERMISSION_NAME}"
+            echo "DB_PERMISSION_USER=${DB_PERMISSION_USER}"
+            echo "DB_PERMISSION_PASSWORD=${DB_PERMISSION_PASSWORD}"
+            echo "DB_SNIPPET_NAME=${DB_SNIPPET_NAME}"
+            echo "DB_SNIPPET_USERNAME=${DB_SNIPPET_USERNAME}"
+            echo "DB_SNIPPET_PASSWORD=${DB_SNIPPET_PASSWORD}"
+            echo "SPRING_DATASOURCE_URL_PERMISSIONDB=jdbc:postgresql://permission-db:5432/${DB_PERMISSION_NAME}"
+            echo "SPRING_DATASOURCE_USERNAME_PERMISSIONDB=${DB_PERMISSION_USER}"
+            echo "SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=${DB_PERMISSION_PASSWORD}"
+            echo "SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/${DB_SNIPPET_NAME}"
+            echo "SPRING_DATASOURCE_USERNAME_SNIPPET=${DB_SNIPPET_USERNAME}"
+            echo "SPRING_DATASOURCE_PASSWORD_SNIPPET=${DB_SNIPPET_PASSWORD}"
+            echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${AUTH0_ISSUER}"
+            echo "AUTH0_AUDIENCE=${AUTH0_AUDIENCE}"
+          } >> "$file"
+
+          echo "Archivo .env.ci.dev generado."
+
+      - name: Validar docker compose
+        run: docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev config
+
+      - name: Login GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USER || github.actor }}
           password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Validate docker-compose syntax
-        run: docker compose config
+      - name: Pull imágenes
+        run: docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev pull
 
-      - name: Pull images
-        run: docker compose pull
+      - name: Levantar stack
+        run: docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev up -d --remove-orphans
 
-      - name: Create .env for CI
-        run: |
-          cat > .env << 'EOF'
-          # Permission DB
-          DB_PERMISSION_NAME=permission_db
-          DB_PERMISSION_USER=postgres
-          DB_PERMISSION_PASSWORD=postgres
-          # Snippet DB
-          DB_SNIPPET_NAME=snippet_db
-          DB_SNIPPET_USERNAME=postgres
-          DB_SNIPPET_PASSWORD=postgres
-          # JDBC URLs
-          SPRING_DATASOURCE_URL_PERMISSIONDB=jdbc:postgresql://permission-db:5432/permission_db
-          SPRING_DATASOURCE_USERNAME_PERMISSIONDB=postgres
-          SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=postgres
-          SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/snippet_db
-          SPRING_DATASOURCE_USERNAME_SNIPPET=postgres
-          SPRING_DATASOURCE_PASSWORD_SNIPPET=postgres
-          # Snippet → Language
-          LANGUAGE_BASE_URL=http://language-service:8080
-          EOF
-          echo "---- CI .env ----"; cat .env      
-
-      - name: Start stack
-        run: docker compose up -d --remove-orphans
-
-      - name: Wait for services (HTTP probes)
-        shell: bash
+      - name: Esperar salud de contenedores (healthcheck vía Docker)
         run: |
           set -euo pipefail
+          wait_health() {
+            local name="$1"
+            echo "→ esperando salud: $name"
+            for i in $(seq 1 40); do
+              status="$(docker inspect -f '{{ .State.Health.Status }}' "$name" 2>/dev/null || echo 'starting')"
+              if [ "$status" = "healthy" ]; then
+                echo "✓ $name healthy"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "::error::$name no alcanzó estado healthy"
+            return 1
+          }
+          wait_health permission-db
+          wait_health snippet-db
+          wait_health permission-service
+          wait_health snippet-service
+          wait_health language-service
 
-          wait_up() {
-              local name="$1" url="$2"
-              echo "→ waiting $name at $url ..."
-              for i in $(seq 1 40); do
-                if curl -fsS "$url" | grep -q '"status":"UP"'; then
-                  echo "✓ $name UP"; return 0
-                fi
-                sleep 2
-              done
-              echo "::error::$name did not become UP"; return 1
-            }
-            wait_up "permission-service" "http://localhost:8080/actuator/health"
-            wait_up "snippet-service"    "http://localhost:8081/actuator/health"
-            wait_up "language-service"   "http://localhost:8082/actuator/health"
+      - name: Mostrar estado (sin secretos)
+        run: docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev ps
 
-      - name: Show logs on failure
+      - name: Logs en fallo
         if: failure()
         run: |
-          docker compose ps
-          docker compose logs --no-color --timestamps permission-db || true
-          docker compose logs --no-color --timestamps snippet-db || true
-          docker compose logs --no-color --timestamps permission-service || true
-          docker compose logs --no-color --timestamps snippet-service || true
-          docker compose logs --no-color --timestamps language-service || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps permission-db || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps snippet-db || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps permission-service || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps snippet-service || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps language-service || true
 
-      - name: Down stack
+      - name: Derribar stack
         if: always()
-        run: docker compose down -v
+        run: docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev down -v
+
+      - name: Borrar archivo temporal .env.ci.dev
+        if: always()
+        run: rm -f .env.ci.dev
