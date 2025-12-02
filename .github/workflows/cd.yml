@@ -52,9 +52,6 @@ jobs:
             echo "SPRING_DATASOURCE_USERNAME_PERMISSIONDB=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
             echo "SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
 
-            AUTH0_ISSUER='${{ secrets.AUTH0_ISSUER }}'
-            AUTH0_AUDIENCE='${{ secrets.AUTH0_AUDIENCE }}'
-
             # Snippet DB
             echo "DB_SNIPPET_NAME=${{ secrets.DB_NAME }}" >> "$ENV_FILE"
             echo "DB_SNIPPET_USERNAME=${{ secrets.DB_USERNAME }}" >> "$ENV_FILE"
@@ -62,9 +59,6 @@ jobs:
             echo "SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/${{ secrets.DB_NAME }}" >> "$ENV_FILE"
             echo "SPRING_DATASOURCE_USERNAME_SNIPPET=${{ secrets.DB_USERNAME }}" >> "$ENV_FILE"
             echo "SPRING_DATASOURCE_PASSWORD_SNIPPET=${{ secrets.DB_PASSWORD }}" >> "$ENV_FILE"
-
-            [ -n "${AUTH0_ISSUER}" ] && echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${AUTH0_ISSUER}" >> "$ENV_FILE"
-            [ -n "${AUTH0_AUDIENCE}" ] && echo "AUTH0_AUDIENCE=${AUTH0_AUDIENCE}" >> "$ENV_FILE"
 
             # Auth0
             echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${{ secrets.AUTH0_ISSUER }}" >> "$ENV_FILE"
@@ -76,33 +70,23 @@ jobs:
               echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
             fi
 
-            echo "[cd] login ghcr"
-
             # --- Nuevo: crear .env.ui desde Secrets para la UI ---
-            echo '[cd] writing .env.ui from secrets'
+            echo "[cd] writing .env.ui from secrets"
             : > .env.ui
+            echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> .env.ui
+            echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> .env.ui
+            echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> .env.ui
+            echo "VITE_AUTH0_CALLBACK_URL=${{ secrets.VITE_AUTH0_CALLBACK_URL }}" >> .env.ui
+            echo "VITE_PERMISSION_BASE_URL=${{ secrets.VITE_PERMISSION_BASE_URL }}" >> .env.ui
 
-            VITE_AUTH0_DOMAIN='${{ secrets.VITE_AUTH0_DOMAIN }}'
-            VITE_AUTH0_CLIENT_ID='${{ secrets.VITE_AUTH0_CLIENT_ID }}'
-            VITE_AUTH0_AUDIENCE='${{ secrets.VITE_AUTH0_AUDIENCE }}'
-            VITE_AUTH0_CALLBACK_URL='${{ secrets.VITE_AUTH0_CALLBACK_URL }}'
-            VITE_PERMISSION_BASE_URL='${{ secrets.VITE_PERMISSION_BASE_URL }}'
-
-            [ -n "${VITE_AUTH0_DOMAIN}" ] && echo "VITE_AUTH0_DOMAIN=${VITE_AUTH0_DOMAIN}" >> .env.ui
-            [ -n "${VITE_AUTH0_CLIENT_ID}" ] && echo "VITE_AUTH0_CLIENT_ID=${VITE_AUTH0_CLIENT_ID}" >> .env.ui
-            [ -n "${VITE_AUTH0_AUDIENCE}" ] && echo "VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}" >> .env.ui
-            [ -n "${VITE_AUTH0_CALLBACK_URL}" ] && echo "VITE_AUTH0_CALLBACK_URL=${VITE_AUTH0_CALLBACK_URL}" >> .env.ui
-            [ -n "${VITE_PERMISSION_BASE_URL}" ] && echo "VITE_PERMISSION_BASE_URL=${VITE_PERMISSION_BASE_URL}" >> .env.ui
-
-            # Compatibilidad: si el compose actual usa $ENV_FILE (ej .env.dev), copiar/merge para que la UI también reciba variables.
-            # Si ya cambiaste docker-compose para usar .env.ui puedes omitir el merge.
+            # Compatibilidad: opcionalmente fusionar .env.ui en el env principal para servicios que leen de allí
             if [ -f "$ENV_FILE" ]; then
-              echo '[cd] merging .env.ui into' "$ENV_FILE" ' (compatibility)'
+              echo "[cd] merging .env.ui into $ENV_FILE (compatibility)"
               cat .env.ui >> "$ENV_FILE"
             fi
             # --- fin .env.ui ---
 
-            echo '[cd] login to ghcr.io'
+            echo "[cd] login ghcr"
             docker logout ghcr.io >/dev/null 2>&1 || true
             echo "${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
 
@@ -122,7 +106,7 @@ jobs:
               for i in $(seq 1 40); do
                 status="$(docker inspect -f '{{ .State.Health.Status }}' "$name" 2>/dev/null || echo starting)"
                 if [ "$status" = "healthy" ]; then
-                  echo "✓ $name healthy"; return 0
+                  [...]
                 fi
                 sleep 2
               done
