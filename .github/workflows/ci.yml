@@ -38,6 +38,29 @@ jobs:
       - name: Pull images
         run: docker compose pull
 
+      - name: Create .env for CI
+        run: |
+          cat > .env << 'EOF'
+          # Permission DB
+          DB_PERMISSION_NAME=permission_db
+          DB_PERMISSION_USER=postgres
+          DB_PERMISSION_PASSWORD=postgres
+          # Snippet DB
+          DB_SNIPPET_NAME=snippet_db
+          DB_SNIPPET_USERNAME=postgres
+          DB_SNIPPET_PASSWORD=postgres
+          # JDBC URLs
+          SPRING_DATASOURCE_URL_PERMISSIONDB=jdbc:postgresql://permission-db:5432/permission_db
+          SPRING_DATASOURCE_USERNAME_PERMISSIONDB=postgres
+          SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=postgres
+          SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/snippet_db
+          SPRING_DATASOURCE_USERNAME_SNIPPET=postgres
+          SPRING_DATASOURCE_PASSWORD_SNIPPET=postgres
+          # Snippet → Language
+          LANGUAGE_BASE_URL=http://language-service:8080
+          EOF
+          echo "---- CI .env ----"; cat .env      
+
       - name: Start stack
         run: docker compose up -d --remove-orphans
 
@@ -47,20 +70,19 @@ jobs:
           set -euo pipefail
 
           wait_up() {
-            local name="$1" url="$2"
-            echo "Waiting for $name at $url ..."
-            for i in {1..60}; do
-              if curl -fsS "$url" | grep -q '"status":"UP"'; then
-                echo "$name UP"; return 0
-              fi
-              sleep 2
-            done
-            echo "::error::$name did not become UP"; return 1
-          }
-
-          wait_up "permission-service" http://localhost:8080/actuator/health
-          wait_up "snippet-service"    http://localhost:8081/actuator/health
-          wait_up "language-service"   http://localhost:8082/actuator/health
+              local name="$1" url="$2"
+              echo "→ waiting $name at $url ..."
+              for i in $(seq 1 40); do
+                if curl -fsS "$url" | grep -q '"status":"UP"'; then
+                  echo "✓ $name UP"; return 0
+                fi
+                sleep 2
+              done
+              echo "::error::$name did not become UP"; return 1
+            }
+            wait_up "permission-service" "http://localhost:8080/actuator/health"
+            wait_up "snippet-service"    "http://localhost:8081/actuator/health"
+            wait_up "language-service"   "http://localhost:8082/actuator/health"
 
       - name: Show logs on failure
         if: failure()
