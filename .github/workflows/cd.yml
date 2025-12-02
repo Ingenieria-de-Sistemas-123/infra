@@ -29,40 +29,39 @@ jobs:
             set -Eeuo pipefail
             trap 'echo "::error::failed at line $LINENO"; exit 1' ERR
             set -x
-            
+
             cd '${{ secrets.DEPLOY_WORKDIR }}'
-            
+
             BRANCH='${{ github.ref_name }}'
             if [ "$BRANCH" = "main" ]; then
-            COMPOSE_FILE='docker-compose.prod.yml'
-            ENV_FILE='.env.prod'
+              COMPOSE_FILE='docker-compose.prod.yml'
+              ENV_FILE='.env.prod'
             else
-            COMPOSE_FILE='docker-compose.dev.yml'
-            ENV_FILE='.env.dev'
+              COMPOSE_FILE='docker-compose.dev.yml'
+              ENV_FILE='.env.dev'
             fi
-            
+
             echo '[cd] sync infra repo to' "$BRANCH"
             git fetch --all --prune
             git reset --hard "origin/$BRANCH"
-            
+
             echo '[cd] using compose file:' "$COMPOSE_FILE"
             test -f "$COMPOSE_FILE" || { echo "::error file=$COMPOSE_FILE::compose file not found"; exit 1; }
-            
+
             echo '[cd] writing' "$ENV_FILE" 'from secrets'
             : > "$ENV_FILE"
-            
+
             DB_PERMISSION_NAME='${{ secrets.DB_PERMISSION_NAME }}'
             DB_PERMISSION_USER='${{ secrets.DB_PERMISSION_USER }}'
             DB_PERMISSION_PASSWORD='${{ secrets.DB_PERMISSION_PASSWORD }}'
-            
+
             DB_SNIPPET_NAME='${{ secrets.DB_NAME }}'
             DB_SNIPPET_USERNAME='${{ secrets.DB_USERNAME }}'
             DB_SNIPPET_PASSWORD='${{ secrets.DB_PASSWORD }}'
-            
+
             AUTH0_ISSUER='${{ secrets.AUTH0_ISSUER }}'
             AUTH0_AUDIENCE='${{ secrets.AUTH0_AUDIENCE }}'
 
-          # Variables para permission-db y permission-service
             [ -n "${DB_PERMISSION_NAME}" ] && echo "DB_PERMISSION_NAME=${DB_PERMISSION_NAME}" >> "$ENV_FILE"
             [ -n "${DB_PERMISSION_USER}" ] && echo "DB_PERMISSION_USER=${DB_PERMISSION_USER}" >> "$ENV_FILE"
             [ -n "${DB_PERMISSION_PASSWORD}" ] && echo "DB_PERMISSION_PASSWORD=${DB_PERMISSION_PASSWORD}" >> "$ENV_FILE"
@@ -72,34 +71,56 @@ jobs:
             [ -n "${AUTH0_ISSUER}" ] && echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${AUTH0_ISSUER}" >> "$ENV_FILE"
             [ -n "${AUTH0_AUDIENCE}" ] && echo "AUTH0_AUDIENCE=${AUTH0_AUDIENCE}" >> "$ENV_FILE"
 
-            # Variables para snippet-db y snippet-service
             [ -n "${DB_SNIPPET_NAME}" ] && echo "DB_SNIPPET_NAME=${DB_SNIPPET_NAME}" >> "$ENV_FILE"
             [ -n "${DB_SNIPPET_USERNAME}" ] && echo "DB_SNIPPET_USERNAME=${DB_SNIPPET_USERNAME}" >> "$ENV_FILE"
             [ -n "${DB_SNIPPET_PASSWORD}" ] && echo "DB_SNIPPET_PASSWORD=${DB_SNIPPET_PASSWORD}" >> "$ENV_FILE"
             echo "SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/${DB_SNIPPET_NAME:-snippet-db}" >> "$ENV_FILE"
             echo "SPRING_DATASOURCE_USERNAME_SNIPPET=${DB_SNIPPET_USERNAME:-app}" >> "$ENV_FILE"
             echo "SPRING_DATASOURCE_PASSWORD_SNIPPET=${DB_SNIPPET_PASSWORD:-app}" >> "$ENV_FILE"
-            
-            # Perfil y base URL (dev)
+
             if [ "$ENV_FILE" = ".env.dev" ]; then
-            echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
-            echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
+              echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
+              echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
             fi
-            
+
+            # --- Nuevo: crear .env.ui desde Secrets para la UI ---
+            echo '[cd] writing .env.ui from secrets'
+            : > .env.ui
+
+            VITE_AUTH0_DOMAIN='${{ secrets.VITE_AUTH0_DOMAIN }}'
+            VITE_AUTH0_CLIENT_ID='${{ secrets.VITE_AUTH0_CLIENT_ID }}'
+            VITE_AUTH0_AUDIENCE='${{ secrets.VITE_AUTH0_AUDIENCE }}'
+            VITE_AUTH0_CALLBACK_URL='${{ secrets.VITE_AUTH0_CALLBACK_URL }}'
+            VITE_PERMISSION_BASE_URL='${{ secrets.VITE_PERMISSION_BASE_URL }}'
+
+            [ -n "${VITE_AUTH0_DOMAIN}" ] && echo "VITE_AUTH0_DOMAIN=${VITE_AUTH0_DOMAIN}" >> .env.ui
+            [ -n "${VITE_AUTH0_CLIENT_ID}" ] && echo "VITE_AUTH0_CLIENT_ID=${VITE_AUTH0_CLIENT_ID}" >> .env.ui
+            [ -n "${VITE_AUTH0_AUDIENCE}" ] && echo "VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}" >> .env.ui
+            [ -n "${VITE_AUTH0_CALLBACK_URL}" ] && echo "VITE_AUTH0_CALLBACK_URL=${VITE_AUTH0_CALLBACK_URL}" >> .env.ui
+            [ -n "${VITE_PERMISSION_BASE_URL}" ] && echo "VITE_PERMISSION_BASE_URL=${VITE_PERMISSION_BASE_URL}" >> .env.ui
+
+            # Compatibilidad: si el compose actual usa $ENV_FILE (ej .env.dev), copiar/merge para que la UI también reciba variables.
+            # Si ya cambiaste docker-compose para usar .env.ui puedes omitir el merge.
+            if [ -f "$ENV_FILE" ]; then
+              echo '[cd] merging .env.ui into' "$ENV_FILE" ' (compatibility)'
+              cat .env.ui >> "$ENV_FILE"
+            fi
+            # --- fin .env.ui ---
+
             echo '[cd] login to ghcr.io'
             docker logout ghcr.io >/dev/null 2>&1 || true
             echo '${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ secrets.GHCR_USER || github.actor }}' --password-stdin
-          
+
             compose() { docker compose "$@" || docker-compose "$@" ; }
-          
+
             echo '[cd] deploy ('"$COMPOSE_FILE"')'
             compose -f "$COMPOSE_FILE" pull
-            
+
             echo '[cd] compose config'
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
-            
+
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
-            
+
             echo '[cd] wait for containers health'
             wait_health() {
               local name="$1"
@@ -118,18 +139,18 @@ jobs:
             wait_health permission-service
             wait_health snippet-service
             wait_health language-service
-                              
+
             echo '[cd] check reverse-proxy port'
             curl -fsSI http://localhost/ || curl -kfsSI https://localhost/ || { echo "::warning::reverse-proxy no respondió a localhost"; true; }
 
             echo '[cd] state'
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
-            
+
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps permission-db || true
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps snippet-db || true
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps permission-service || true
-            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps snippet-service || true
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps snippet-service || true
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps language-service || true
-                            
+
             echo '[cd] prune old images'
             docker image prune -f
