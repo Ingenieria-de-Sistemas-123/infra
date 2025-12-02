@@ -30,14 +30,17 @@ jobs:
 
             cd "${{ secrets.DEPLOY_WORKDIR }}"
 
-            BRANCH="dev"  # ajustar si quieres usar github.ref_name
-            if [ "$BRANCH" = "main" ]; then
-              COMPOSE_FILE="docker-compose.prod.yml"
-              ENV_FILE=".env.prod"
-            else
-              COMPOSE_FILE="docker-compose.dev.yml"
-              ENV_FILE=".env.dev"
-            fi
+            BRANCH='${{ github.ref_name }}'
+            case "$BRANCH" in
+              main)
+                COMPOSE_FILE="docker-compose.prod.yml"
+                ENV_FILE=".env.prod"
+                ;;
+              *)
+                COMPOSE_FILE="docker-compose.dev.yml"
+                ENV_FILE=".env.dev"
+                ;;
+            esac
 
             echo "[cd] sync infra repo to $BRANCH"
             git fetch --all --prune
@@ -49,28 +52,27 @@ jobs:
             echo "[cd] writing $ENV_FILE from secrets"
             : > "$ENV_FILE"
 
-            # Permission DB
-            [ -n "${DB_PERMISSION_NAME:-}" ] && echo "DB_PERMISSION_NAME=${DB_PERMISSION_NAME}" >> "$ENV_FILE"
-            [ -n "${DB_PERMISSION_USER:-}" ] && echo "DB_PERMISSION_USER=${DB_PERMISSION_USER}" >> "$ENV_FILE"
-            [ -n "${DB_PERMISSION_PASSWORD:-}" ] && echo "DB_PERMISSION_PASSWORD=${DB_PERMISSION_PASSWORD}" >> "$ENV_FILE"
+            # Permission DB (secrets obligatorios)
+            echo "DB_PERMISSION_NAME=${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
+            echo "DB_PERMISSION_USER=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
+            echo "DB_PERMISSION_PASSWORD=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_URL_PERMISSIONDB=jdbc:postgresql://permission-db:5432/${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_USERNAME_PERMISSIONDB=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
 
             # Snippet DB
-            [ -n "${DB_SNIPPET_NAME:-}" ] && echo "DB_SNIPPET_NAME=${DB_SNIPPET_NAME}" >> "$ENV_FILE"
-            [ -n "${DB_SNIPPET_USERNAME:-}" ] && echo "DB_SNIPPET_USERNAME=${DB_SNIPPET_USERNAME}" >> "$ENV_FILE"
-            [ -n "${DB_SNIPPET_PASSWORD:-}" ] && echo "DB_SNIPPET_PASSWORD=${DB_SNIPPET_PASSWORD}" >> "$ENV_FILE"
+            echo "DB_SNIPPET_NAME=${{ secrets.DB_NAME }}" >> "$ENV_FILE"
+            echo "DB_SNIPPET_USERNAME=${{ secrets.DB_USERNAME }}" >> "$ENV_FILE"
+            echo "DB_SNIPPET_PASSWORD=${{ secrets.DB_PASSWORD }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/${{ secrets.DB_NAME }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_USERNAME_SNIPPET=${{ secrets.DB_USERNAME }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_PASSWORD_SNIPPET=${{ secrets.DB_PASSWORD }}" >> "$ENV_FILE"
 
-            # JDBC derivadas (fallback si faltan secrets)
-            echo "SPRING_DATASOURCE_URL_PERMISSIONDB=jdbc:postgresql://permission-db:5432/${DB_PERMISSION_NAME:-permission_db}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_USERNAME_PERMISSIONDB=${DB_PERMISSION_USER:-postgres}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=${DB_PERMISSION_PASSWORD:-postgres}" >> "$ENV_FILE"
+            # Auth0
+            echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${{ secrets.AUTH0_ISSUER }}" >> "$ENV_FILE"
+            echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}" >> "$ENV_FILE"
 
-            echo "SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/${DB_SNIPPET_NAME:-snippet-db}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_USERNAME_SNIPPET=${DB_SNIPPET_USERNAME:-app}" >> "$ENV_FILE"
-            echo "SPRING_DATASOURCE_PASSWORD_SNIPPET=${DB_SNIPPET_PASSWORD:-app}" >> "$ENV_FILE"
-
-            [ -n "${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:-}" ] && echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI}" >> "$ENV_FILE"
-            [ -n "${AUTH0_AUDIENCE:-}" ] && echo "AUTH0_AUDIENCE=${AUTH0_AUDIENCE}" >> "$ENV_FILE"
-
+            # Otros opcionales para dev
             if [ "$ENV_FILE" = ".env.dev" ]; then
               echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
               echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
@@ -78,7 +80,7 @@ jobs:
 
             echo "[cd] login ghcr"
             docker logout ghcr.io >/dev/null 2>&1 || true
-            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
+            echo "${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
 
             compose() { docker compose "$@" || docker-compose "$@"; }
 
