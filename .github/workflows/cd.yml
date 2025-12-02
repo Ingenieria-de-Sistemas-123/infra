@@ -24,6 +24,7 @@ jobs:
           script_stop: true
           command_timeout: 20m
           script: |
+            bash -s <<'EOF'
             set -Eeuo pipefail
             trap 'echo "::error::failed at line $LINENO"; exit 1' ERR
             set -x
@@ -31,16 +32,7 @@ jobs:
             cd "${{ secrets.DEPLOY_WORKDIR }}"
 
             BRANCH='${{ github.ref_name }}'
-            case "$BRANCH" in
-              main)
-                COMPOSE_FILE="docker-compose.prod.yml"
-                ENV_FILE=".env.prod"
-                ;;
-              *)
-                COMPOSE_FILE="docker-compose.dev.yml"
-                ENV_FILE=".env.dev"
-                ;;
-            esac
+            if [ "$BRANCH" = "main" ]; then COMPOSE_FILE="docker-compose.prod.yml"; ENV_FILE=".env.prod"; else COMPOSE_FILE="docker-compose.dev.yml"; ENV_FILE=".env.dev"; fi
 
             echo "[cd] sync infra repo to $BRANCH"
             git fetch --all --prune
@@ -52,7 +44,7 @@ jobs:
             echo "[cd] writing $ENV_FILE from secrets"
             : > "$ENV_FILE"
 
-            # Permission DB (secrets obligatorios)
+            # Permission DB
             echo "DB_PERMISSION_NAME=${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
             echo "DB_PERMISSION_USER=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
             echo "DB_PERMISSION_PASSWORD=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
@@ -72,7 +64,7 @@ jobs:
             echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${{ secrets.AUTH0_ISSUER }}" >> "$ENV_FILE"
             echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}" >> "$ENV_FILE"
 
-            # Otros opcionales para dev
+            # Dev extras
             if [ "$ENV_FILE" = ".env.dev" ]; then
               echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
               echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
@@ -116,3 +108,4 @@ jobs:
 
             echo "[cd] prune images"
             docker image prune -f
+            EOF
