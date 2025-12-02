@@ -88,9 +88,12 @@ services:
     image: nginx:alpine
     container_name: reverse-proxy-dev
     depends_on:
-      - permission-service
-      - snippet-service
-      - language-service
+      permission-service:
+        condition: service_healthy
+      snippet-service:
+        condition: service_healthy
+      language-service:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
