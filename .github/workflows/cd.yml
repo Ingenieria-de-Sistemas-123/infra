@@ -3,7 +3,6 @@ name: CD (infra)
 on:
   push:
     branches: [ dev, main ]
-  workflow_dispatch:
 
 concurrency:
   group: cd-infra-${{ github.ref }}
