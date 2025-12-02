@@ -62,7 +62,10 @@ jobs:
             echo "SPRING_DATASOURCE_URL=jdbc:postgresql://permission-db:5432/${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
             echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
             echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
-
+            echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${{ secrets.AUTH0_ISSUER }}" >> "$ENV_FILE"
+            echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=${{ secrets.AUTH0_ISSUER }}.well-known/jwks.json" >> "$ENV_FILE"
+            echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}" >> "$ENV_FILE"
+            
             echo "[cd] login to ghcr.io"
             docker logout ghcr.io >/dev/null 2>&1 || true
             echo "${{ secrets.GH_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
