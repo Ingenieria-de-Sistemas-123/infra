@@ -89,9 +89,12 @@ services:
     image: ghcr.io/ingenieria-de-sistemas-123/printscript-ui:dev-latest
     expose:
       - "80"
-    # Ahora lee sus variables desde .env.ui (archivo generado por Actions desde los Secrets)
-    env_file:
-      - .env.dev
+    environment:
+        - VITE_AUTH0_DOMAIN=${VITE_AUTH0_DOMAIN}
+        - VITE_AUTH0_CLIENT_ID=${VITE_AUTH0_CLIENT_ID}
+        - VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}
+        - VITE_AUTH0_CALLBACK_URL=${VITE_AUTH0_CALLBACK_URL}
+        - VITE_PERMISSION_BASE_URL=${VITE_PERMISSION_BASE_URL}
 
   reverse-proxy:
     image: nginx:alpine
