@@ -94,7 +94,13 @@ jobs:
             fi
 
             echo "[cd] state"
-            docker compose -f "$COMPOSE_FILE" ps
-
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
+            
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps permission-db || true
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps snippet-db || true
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps permission-service || true
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps snippet-service || true
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps language-service || true
+            
             echo "[cd] prune old images"
             docker image prune -f
