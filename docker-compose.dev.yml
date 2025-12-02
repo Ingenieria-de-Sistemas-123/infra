@@ -1,12 +1,9 @@
-# yaml
 services:
   permission-service:
     image: ghcr.io/ingenieria-de-sistemas-123/permission-service:dev
     container_name: permission-service
     expose:
       - "8080"
-    env_file:
-      - .env.dev
     environment:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL_PERMISSIONDB}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME_PERMISSIONDB}

@@ -72,8 +72,14 @@ jobs:
 
             echo "[cd] deploy ($COMPOSE_FILE)"
             docker compose -f "$COMPOSE_FILE" pull
+            
+            # Validar configuración con el env file
+            echo "[cd] compose config"
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
+            
+            # Levantar servicios
             docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
-
+            
             echo "[cd] wait for services"
             wait_up() {
               local name="$1" url="$2"
@@ -95,7 +101,6 @@ jobs:
 
             echo "[cd] state"
             docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
-            
             docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps permission-db || true
             docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps snippet-db || true
             docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps permission-service || true
