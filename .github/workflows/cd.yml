@@ -9,11 +9,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy_to_vm:
+  deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -70,7 +67,7 @@ jobs:
               echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
             fi
 
-            
+            # UI variables (se escriben en el env principal para simplificar)
             echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> "$ENV_FILE"
             echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> "$ENV_FILE"
             echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> "$ENV_FILE"
@@ -91,17 +88,20 @@ jobs:
 
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
 
+            # Reemplazo: función de salud sin literales '...'
             wait_health() {
               local name="$1"
               echo "→ esperando salud: $name"
               for i in $(seq 1 40); do
                 status="$(docker inspect -f '{{ .State.Health.Status }}' "$name" 2>/dev/null || echo starting)"
                 if [ "$status" = "healthy" ]; then
-                  [...]
+                  echo "✓ $name healthy"
+                  return 0
                 fi
                 sleep 2
               done
-              echo "::error::$name no alcanzó estado healthy"; return 1
+              echo "::error::$name no alcanzó estado healthy"
+              return 1
             }
 
             wait_health permission-db
