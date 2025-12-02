@@ -393,5 +393,8 @@ Reemplaza el tag por el digest al fijar una versión exacta.
 ### 17.6 Limpieza automática
 Agrega prune controlado (ya está en CD). Considera un job mensual que respalde volúmenes antes de prune extendido.
 
----
-
+### 17.7 Archivos de ejemplo .env
+Se agregaron plantillas:
+- `.env.dev.dev.example`
+- `.env.prod.example`
+Copia y renombra la que corresponda, reemplazando valores `CHANGEME`. No subas los archivos reales con credenciales. Preferí usar Secrets en CI/CD.
