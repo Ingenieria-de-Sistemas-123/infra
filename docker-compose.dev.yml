@@ -86,7 +86,7 @@ services:
 
   printscript-ui:
     container_name: "printscript-ui"
-    image: ghcr.io/ingenieria-de-sistemas-123/printscript-ui:dev-latest
+    image: ghcr.io/ingenieria-de-sistemas-123/printscript-ui:dev
     expose:
       - "80"
     environment:
