@@ -1,5 +1,5 @@
 name: ss-infra-prod
-
+#para editar
 services:
   snippet-db:
     image: postgres:16-alpine
