@@ -12,10 +12,8 @@ services:
   permission-db:
     image: postgres:16
     container_name: permission-db-local
-    environment:
-      POSTGRES_DB: ${PERMISSION_DB_NAME:-permission}
-      POSTGRES_USER: ${PERMISSION_DB_USER:-permission}
-      POSTGRES_PASSWORD: ${PERMISSION_DB_PASSWORD:-permission}
+    env_file:
+      - ./env/local/permission-db.env
     ports:
       - "15432:5432" # host:container para debug local
     healthcheck:
@@ -28,10 +26,8 @@ services:
   snippet-db:
     image: postgres:16-alpine
     container_name: snippet-db-local
-    environment:
-      POSTGRES_DB: ${SNIPPET_DB_NAME:-snippet}
-      POSTGRES_USER: ${SNIPPET_DB_USER:-snippet}
-      POSTGRES_PASSWORD: ${SNIPPET_DB_PASSWORD:-snippet}
+    env_file:
+      - ./env/local/snippet-db.env
     ports:
       - "25432:5432"
     healthcheck:
@@ -43,17 +39,13 @@ services:
 
   # Servicios backend
   permission-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/permission-service:dev
+    image: permission-service
     container_name: permission-service-local
     depends_on:
       permission-db:
         condition: service_healthy
-    environment:
-      SPRING_DATASOURCE_URL: ${PERMISSION_DB_URL:-jdbc:postgresql://permission-db:5432/${PERMISSION_DB_NAME:-permission}}
-      SPRING_DATASOURCE_USERNAME: ${PERMISSION_DB_USER:-permission}
-      SPRING_DATASOURCE_PASSWORD: ${PERMISSION_DB_PASSWORD:-permission}
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${AUTH0_ISSUER_URI:-}
-      AUTH0_AUDIENCE: ${AUTH0_AUDIENCE:-https://snippet-api}
+    env_file:
+      - ./env/local/permission-service.env
     ports:
       - "18080:8080"
     healthcheck:
@@ -64,10 +56,10 @@ services:
       start_period: 15s
 
   language-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/language-service:dev
+    image: language-service
     container_name: language-service-local
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
+    env_file:
+      - ./env/local/language-service.env
     ports:
       - "18082:8080"
     healthcheck:
@@ -78,17 +70,13 @@ services:
       start_period: 15s
 
   snippet-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/snippet-service:dev
+    image: snippet-service
     container_name: snippet-service-local
     depends_on:
       snippet-db:
         condition: service_healthy
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: ${SNIPPET_DB_URL:-jdbc:postgresql://snippet-db:5432/${SNIPPET_DB_NAME:-snippet}}
-      SPRING_DATASOURCE_USERNAME: ${SNIPPET_DB_USER:-snippet}
-      SPRING_DATASOURCE_PASSWORD: ${SNIPPET_DB_PASSWORD:-snippet}
-      LANGUAGE_BASE_URL: ${LANGUAGE_BASE_URL:-http://language-service:8080}
+    env_file:
+      - ./env/local/snippet-service.env
     ports:
       - "18081:8080"
     healthcheck:
@@ -98,16 +86,35 @@ services:
       retries: 30
       start_period: 15s
 
+  asset-service:
+    image: ghcr.io/austral-ingsis/snippet-asset-service:latest
+    container_name: asset-service-local
+    depends_on:
+      azurite:
+        condition: service_started
+    env_file:
+      - ./env/local/asset-service.env
+    ports:
+      - "18083:8080"
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: azurite-local
+    hostname: azurite
+    restart: always
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    volumes:
+      - azurite_blob_local:/workspace
+
   # UI
   printscript-ui:
-    image: ghcr.io/ingenieria-de-sistemas-123/printscript-ui:dev-latest
+    image: printscript-ui
     container_name: printscript-ui-local
-    environment:
-      VITE_AUTH0_DOMAIN: ${VITE_AUTH0_DOMAIN:-dev-7t5evioih4aq30t7.us.auth0.com}
-      VITE_AUTH0_CLIENT_ID: ${VITE_AUTH0_CLIENT_ID:-VYNjhtO7lzwE7030uJyYaas6buopgtGg}
-      VITE_AUTH0_AUDIENCE: ${VITE_AUTH0_AUDIENCE:-https://snippet-api}
-      VITE_AUTH0_CALLBACK_URL: ${VITE_AUTH0_CALLBACK_URL:-http://localhost:3000}
-      VITE_PERMISSION_BASE_URL: ${VITE_PERMISSION_BASE_URL:-/api}
+    env_file:
+      - ./env/local/printscript-ui.env
     ports:
       - "3000:80"  # UI accesible en http://localhost:3000
 
@@ -129,12 +136,14 @@ services:
       - "8080:80"  # proxy en http://localhost:8080
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
-      # En local, se ignora configuración SSL. Asegúrate que default.conf
-      # no exija certificados al escuchar en 80.
+      - ./nginx/conf.d/local.conf:/etc/nginx/conf.d/default.conf:ro
+      # Configuración HTTP simple sin SSL pensada para localhost.
 
 networks:
   default:
     name: infra_local_default
     driver: bridge
+
+volumes:
+  azurite_blob_local:
 
