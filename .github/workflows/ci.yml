@@ -119,6 +119,10 @@ jobs:
           docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps permission-service || true
           docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps snippet-service || true
           docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps language-service || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps asset-service || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps reverse-proxy-dev || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps printscript-ui || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps azurite || true
 
       - name: Derribar stack
         if: always()
