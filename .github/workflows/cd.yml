@@ -67,6 +67,11 @@ jobs:
               echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
             fi
 
+            # Asset service
+            echo "ASSET_SERVICE_AZURE_HOST=${{ secrets.ASSET_SERVICE_AZURE_HOST }}" >> "$ENV_FILE"
+            echo "ASSET_SERVICE_NEW_RELIC_APP_NAME=${{ secrets.ASSET_SERVICE_NEW_RELIC_APP_NAME }}" >> "$ENV_FILE"
+            echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}" >> "$ENV_FILE"
+
             # UI variables (se escriben en el env principal para simplificar)
             echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> "$ENV_FILE"
             echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> "$ENV_FILE"
@@ -78,7 +83,18 @@ jobs:
             docker logout ghcr.io >/dev/null 2>&1 || true
             echo "${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
 
-            compose() { docker compose "$@" || docker-compose "$@"; }
+            if docker compose version >/dev/null 2>&1; then
+              COMPOSE_BIN=(docker compose)
+            elif command -v docker-compose >/dev/null 2>&1; then
+              COMPOSE_BIN=(docker-compose)
+            else
+              echo "::error::Neither 'docker compose' nor 'docker-compose' is available"
+              exit 1
+            fi
+
+            compose() {
+              "${COMPOSE_BIN[@]}" "$@"
+            }
 
             echo "[cd] pull images"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
