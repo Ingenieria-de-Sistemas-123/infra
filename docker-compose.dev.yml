@@ -56,6 +56,30 @@ services:
       retries: 30
       start_period: 15s
 
+  asset-service:
+    image: ghcr.io/austral-ingsis/snippet-asset-service:latest
+    container_name: asset-service
+    expose: ["8080"]
+    environment:
+      AZURE_HOST: ${ASSET_SERVICE_AZURE_HOST}
+      NEW_RELIC_APP_NAME: ${ASSET_SERVICE_NEW_RELIC_APP_NAME}
+      NEW_RELIC_AGENT_ENABLED: ${ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED}
+    depends_on:
+      azurite:
+        condition: service_started
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: azurite
+    hostname: azurite
+    restart: always
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    volumes:
+      - azurite_blob_dev:/workspace
+
   snippet-db:
     image: postgres:16-alpine
     container_name: snippet-db
@@ -133,3 +157,4 @@ networks:
 volumes:
   certbot_www_dev:
   letsencrypt_dev:
+  azurite_blob_dev:

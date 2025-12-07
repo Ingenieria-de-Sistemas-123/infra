@@ -25,14 +25,22 @@ jobs:
           : > "$file"
 
           # Fallbacks locales (CI) si no hay Secrets (evitan warnings)
-          DB_PERMISSION_NAME="${{ secrets.DB_PERMISSION_NAME || 'permission_db' }}"
-          DB_PERMISSION_USER="${{ secrets.DB_PERMISSION_USER || 'postgres' }}"
-          DB_PERMISSION_PASSWORD="${{ secrets.DB_PERMISSION_PASSWORD || 'postgres' }}"
-          DB_SNIPPET_NAME="${{ secrets.DB_NAME || 'snippet_db' }}"
-          DB_SNIPPET_USERNAME="${{ secrets.DB_USERNAME || 'postgres' }}"
-          DB_SNIPPET_PASSWORD="${{ secrets.DB_PASSWORD || 'postgres' }}"
-          AUTH0_ISSUER="${{ secrets.AUTH0_ISSUER || 'https://example-tenant.auth0.com/' }}"
-          AUTH0_AUDIENCE="${{ secrets.AUTH0_AUDIENCE || 'https://snippet-api' }}"
+          DB_PERMISSION_NAME="${{ secrets.DB_PERMISSION_NAME }}"
+          DB_PERMISSION_USER="${{ secrets.DB_PERMISSION_USER }}"
+          DB_PERMISSION_PASSWORD="${{ secrets.DB_PERMISSION_PASSWORD }}"
+          DB_SNIPPET_NAME="${{ secrets.DB_NAME }}"
+          DB_SNIPPET_USERNAME="${{ secrets.DB_USERNAME }}"
+          DB_SNIPPET_PASSWORD="${{ secrets.DB_PASSWORD }}"
+          AUTH0_ISSUER="${{ secrets.AUTH0_ISSUER }}"
+          AUTH0_AUDIENCE="${{ secrets.AUTH0_AUDIENCE }}"
+          ASSET_SERVICE_AZURE_HOST="${{ secrets.ASSET_SERVICE_AZURE_HOST }}"
+          ASSET_SERVICE_NEW_RELIC_APP_NAME="${{ secrets.ASSET_SERVICE_NEW_RELIC_APP_NAME }}"
+          ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED="${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}"
+          VITE_AUTH0_DOMAIN="${{ secrets.VITE_AUTH0_DOMAIN }}"
+          VITE_AUTH0_CLIENT_ID="${{ secrets.VITE_AUTH0_CLIENT_ID }}"
+          VITE_AUTH0_AUDIENCE="${{ secrets.VITE_AUTH0_AUDIENCE }}"
+          VITE_AUTH0_CALLBACK_URL="${{ secrets.VITE_AUTH0_CALLBACK_URL }}"
+          VITE_PERMISSION_BASE_URL="${{ secrets.VITE_PERMISSION_BASE_URL }}"
 
           {
             echo "DB_PERMISSION_NAME=${DB_PERMISSION_NAME}"
@@ -49,6 +57,14 @@ jobs:
             echo "SPRING_DATASOURCE_PASSWORD_SNIPPET=${DB_SNIPPET_PASSWORD}"
             echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${AUTH0_ISSUER}"
             echo "AUTH0_AUDIENCE=${AUTH0_AUDIENCE}"
+            echo "ASSET_SERVICE_AZURE_HOST=${ASSET_SERVICE_AZURE_HOST}"
+            echo "ASSET_SERVICE_NEW_RELIC_APP_NAME=${ASSET_SERVICE_NEW_RELIC_APP_NAME}"
+            echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED}"
+            echo "VITE_AUTH0_DOMAIN=${VITE_AUTH0_DOMAIN}"
+            echo "VITE_AUTH0_CLIENT_ID=${VITE_AUTH0_CLIENT_ID}"
+            echo "VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}"
+            echo "VITE_AUTH0_CALLBACK_URL=${VITE_AUTH0_CALLBACK_URL}"
+            echo "VITE_PERMISSION_BASE_URL=${VITE_PERMISSION_BASE_URL}"
           } >> "$file"
 
           echo "Archivo .env.ci.dev generado."
@@ -103,6 +119,10 @@ jobs:
           docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps permission-service || true
           docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps snippet-service || true
           docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps language-service || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps asset-service || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps reverse-proxy-dev || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps printscript-ui || true
+          docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev logs --no-color --timestamps azurite || true
 
       - name: Derribar stack
         if: always()

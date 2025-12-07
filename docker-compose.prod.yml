@@ -61,6 +61,33 @@ services:
     restart: unless-stopped
     networks: [ss-prod]
 
+  asset-service:
+    image: ghcr.io/austral-ingsis/snippet-asset-service:latest
+    container_name: asset-service
+    env_file: [.env.prod]
+    environment:
+      AZURE_HOST: ${ASSET_SERVICE_AZURE_HOST}
+      NEW_RELIC_APP_NAME: ${ASSET_SERVICE_NEW_RELIC_APP_NAME}
+      NEW_RELIC_AGENT_ENABLED: ${ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED}
+    expose: ["8080"]
+    depends_on:
+      azurite:
+        condition: service_started
+    networks: [ss-prod]
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: azurite
+    hostname: azurite
+    restart: always
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    volumes:
+      - azurite_blob_prod:/workspace
+    networks: [ss-prod]
+
   language-service:
     image: ghcr.io/ingenieria-de-sistemas-123/language-service:prod
     container_name: language-service
@@ -139,3 +166,4 @@ volumes:
   permission_pg_data_prod:
   certbot_www_prod:
   letsencrypt_prod:
+  azurite_blob_prod:
