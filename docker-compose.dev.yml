@@ -46,6 +46,7 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD_SNIPPET}
       - SPRING_PROFILES_ACTIVE=docker
       - LANGUAGE_BASE_URL=http://language-service:8080
+      - ASSET_SERVICE_BASE_URL=${ASSET_SERVICE_BASE_URL}
     depends_on:
       snippet-db:
         condition: service_healthy

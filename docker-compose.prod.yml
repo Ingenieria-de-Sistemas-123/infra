@@ -51,6 +51,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://snippet-db:5432/${DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      ASSET_SERVICE_BASE_URL: ${ASSET_SERVICE_BASE_URL}
     expose: ["8080"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
