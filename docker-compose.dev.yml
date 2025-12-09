@@ -21,6 +21,7 @@ services:
       retries: 30
       start_period: 15s
 
+#PERMISSION DATABASE
   permission-db:
     image: postgres:16
     container_name: permission-db
