@@ -73,7 +73,18 @@ jobs:
               ASSET_SERVICE_BASE_URL="http://asset-service:8080"
             fi
             echo "ASSET_SERVICE_BASE_URL=${ASSET_SERVICE_BASE_URL}" >> "$ENV_FILE"
-            echo "ASSET_SERVICE_AZURE_HOST=${{ secrets.ASSET_SERVICE_AZURE_HOST }}" >> "$ENV_FILE"
+
+            ASSET_SERVICE_AZURE_HOST="${{ secrets.ASSET_SERVICE_AZURE_HOST }}"
+            if [ -z "$ASSET_SERVICE_AZURE_HOST" ]; then
+              if [ "$ENV_FILE" = ".env.dev" ]; then
+                ASSET_SERVICE_AZURE_HOST="http://azurite"
+              else
+                echo "::error::ASSET_SERVICE_AZURE_HOST secret is required for prod"
+                exit 1
+              fi
+            fi
+            echo "ASSET_SERVICE_AZURE_HOST=${ASSET_SERVICE_AZURE_HOST}" >> "$ENV_FILE"
+
             echo "ASSET_SERVICE_NEW_RELIC_APP_NAME=${{ secrets.ASSET_SERVICE_NEW_RELIC_APP_NAME }}" >> "$ENV_FILE"
             echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}" >> "$ENV_FILE"
 
