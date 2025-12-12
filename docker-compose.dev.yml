@@ -48,9 +48,16 @@ services:
       - SPRING_PROFILES_ACTIVE=docker
       - LANGUAGE_BASE_URL=http://language-service:8080
       - ASSET_SERVICE_BASE_URL=${ASSET_SERVICE_BASE_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST}
+      - SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT}
+      - SPRING_DATA_REDIS_URL=${SPRING_DATA_REDIS_URL}
     depends_on:
       snippet-db:
         condition: service_healthy
+      redis:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
       interval: 5s
@@ -96,6 +103,12 @@ services:
       timeout: 3s
       retries: 30
       start_period: 10s
+
+  redis:
+    image: redis:7
+    container_name: redis
+    restart: always
+    expose: ["6379"]
 
   language-service:
     image: ghcr.io/ingenieria-de-sistemas-123/language-service:dev

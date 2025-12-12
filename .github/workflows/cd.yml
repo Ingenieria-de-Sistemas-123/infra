@@ -67,6 +67,37 @@ jobs:
               echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
             fi
 
+            # Redis (obligatorio: secretos deben estar definidos)
+            if [ -z "${{ secrets.REDIS_HOST }}" ]; then
+              echo "::error::REDIS_HOST secret is required"
+              exit 1
+            fi
+            echo "REDIS_HOST=${{ secrets.REDIS_HOST }}" >> "$ENV_FILE"
+
+            if [ -z "${{ secrets.REDIS_PORT }}" ]; then
+              echo "::error::REDIS_PORT secret is required"
+              exit 1
+            fi
+            echo "REDIS_PORT=${{ secrets.REDIS_PORT }}" >> "$ENV_FILE"
+
+            if [ -z "${{ secrets.SPRING_DATA_REDIS_HOST }}" ]; then
+              echo "::error::SPRING_DATA_REDIS_HOST secret is required"
+              exit 1
+            fi
+            echo "SPRING_DATA_REDIS_HOST=${{ secrets.SPRING_DATA_REDIS_HOST }}" >> "$ENV_FILE"
+
+            if [ -z "${{ secrets.SPRING_DATA_REDIS_PORT }}" ]; then
+              echo "::error::SPRING_DATA_REDIS_PORT secret is required"
+              exit 1
+            fi
+            echo "SPRING_DATA_REDIS_PORT=${{ secrets.SPRING_DATA_REDIS_PORT }}" >> "$ENV_FILE"
+
+            if [ -z "${{ secrets.SPRING_DATA_REDIS_URL }}" ]; then
+              echo "::error::SPRING_DATA_REDIS_URL secret is required"
+              exit 1
+            fi
+            echo "SPRING_DATA_REDIS_URL=${{ secrets.SPRING_DATA_REDIS_URL }}" >> "$ENV_FILE"
+
             # Asset service
             ASSET_SERVICE_BASE_URL="${{ secrets.ASSET_SERVICE_BASE_URL }}"
             if [ -z "$ASSET_SERVICE_BASE_URL" ]; then
