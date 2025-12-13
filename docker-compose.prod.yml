@@ -126,6 +126,20 @@ services:
     restart: unless-stopped
     networks: [ss-prod]
 
+  printscript-ui:
+    container_name: printscript-ui
+    image: ghcr.io/ingenieria-de-sistemas-123/printscript-ui:latest
+    env_file: [.env.prod]
+    expose: ["80"]
+    environment:
+      - VITE_AUTH0_DOMAIN=${VITE_AUTH0_DOMAIN}
+      - VITE_AUTH0_CLIENT_ID=${VITE_AUTH0_CLIENT_ID}
+      - VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}
+      - VITE_AUTH0_CALLBACK_URL=${VITE_AUTH0_CALLBACK_URL}
+      - VITE_PERMISSION_BASE_URL=${VITE_PERMISSION_BASE_URL}
+    restart: unless-stopped
+    networks: [ss-prod]
+
   permission-service:
     image: ghcr.io/ingenieria-de-sistemas-123/permission-service:latest
     container_name: permission-service
@@ -160,6 +174,8 @@ services:
         condition: service_healthy
       permission-service:
         condition: service_healthy
+      printscript-ui:
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"
