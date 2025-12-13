@@ -70,11 +70,9 @@ jobs:
             echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${{ secrets.AUTH0_ISSUER }}" >> "$ENV_FILE"
             echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}" >> "$ENV_FILE"
 
-            # Dev extras
-            if [ "$ENV_FILE" = ".env.dev" ]; then
-              echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
-              echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
-            fi
+            # Shared defaults (dev/prod)
+            echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
+            echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
 
             # Redis (obligatorio: secretos deben estar definidos)
             if [ -z "${{ secrets.REDIS_HOST }}" ]; then
@@ -158,7 +156,17 @@ jobs:
             echo "[cd] config"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
 
-            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
+            if ! compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans; then
+              echo "::error::docker compose up failed"
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 snippet-service || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 snippet-db || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 redis || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 permission-service || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 permission-db || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 language-service || true
+              exit 1
+            fi
 
             # Reemplazo: función de salud sin literales '...'
             wait_health() {
@@ -173,6 +181,8 @@ jobs:
                 sleep 2
               done
               echo "::error::$name no alcanzó estado healthy"
+              echo "[cd] logs $name (tail 200)"
+              docker logs --tail 200 "$name" || true
               return 1
             }
 
