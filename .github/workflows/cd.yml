@@ -25,13 +25,12 @@ jobs:
           host: ${{ env.DEPLOY_VM_HOST }}
           username: ${{ env.DEPLOY_VM_USER }}
           key: ${{ env.DEPLOY_SSH_KEY_MATERIAL }}
-          script_stop: true
+          script_stop: false
           command_timeout: 20m
           script: |
             bash -s <<'EOF'
             set -Eeuo pipefail
             trap 'echo "::error::failed at line $LINENO"; exit 1' ERR
-            set -x
 
             cd "${{ env.DEPLOY_WORKDIR_PATH }}"
 
@@ -127,6 +126,18 @@ jobs:
             echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}" >> "$ENV_FILE"
 
             # UI variables: solo cambian las que terminan en _PROD (para prod)
+            if [ -z "${{ secrets.VITE_AUTH0_DOMAIN }}" ]; then
+              echo "::error::VITE_AUTH0_DOMAIN secret is required"
+              exit 1
+            fi
+            if [ -z "${{ secrets.VITE_AUTH0_CLIENT_ID }}" ]; then
+              echo "::error::VITE_AUTH0_CLIENT_ID secret is required"
+              exit 1
+            fi
+            if [ -z "${{ secrets.VITE_AUTH0_AUDIENCE }}" ]; then
+              echo "::error::VITE_AUTH0_AUDIENCE secret is required"
+              exit 1
+            fi
             echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> "$ENV_FILE"
             echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> "$ENV_FILE"
             echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> "$ENV_FILE"
@@ -215,6 +226,21 @@ jobs:
             wait_health permission-service
             wait_health snippet-service
             wait_health language-service
+
+            echo "[cd] restart reverse-proxy (refresh upstream DNS)"
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart reverse-proxy
+
+            echo "[cd] verify reverse-proxy upstream connectivity"
+            if ! compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://printscript-ui:80/ >/dev/null; then
+              echo "::error::reverse-proxy cannot reach printscript-ui"
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 reverse-proxy || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 printscript-ui || true
+              exit 1
+            fi
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://snippet-service:8080/actuator/health | grep -q UP
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://permission-service:8080/actuator/health | grep -q UP
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://language-service:8080/actuator/health | grep -q UP
 
             echo "[cd] state"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
