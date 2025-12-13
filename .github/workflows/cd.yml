@@ -25,13 +25,12 @@ jobs:
           host: ${{ env.DEPLOY_VM_HOST }}
           username: ${{ env.DEPLOY_VM_USER }}
           key: ${{ env.DEPLOY_SSH_KEY_MATERIAL }}
-          script_stop: true
+          script_stop: false
           command_timeout: 20m
           script: |
             bash -s <<'EOF'
             set -Eeuo pipefail
             trap 'echo "::error::failed at line $LINENO"; exit 1' ERR
-            set -x
 
             cd "${{ env.DEPLOY_WORKDIR_PATH }}"
 
