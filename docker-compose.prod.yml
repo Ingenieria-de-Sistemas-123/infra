@@ -40,7 +40,7 @@ services:
     networks: [ss-prod]
 
   snippet-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/snippet-service:prod
+    image: ghcr.io/ingenieria-de-sistemas-123/snippet-service:latest
     container_name: snippet-service
     depends_on:
       snippet-db:
@@ -95,7 +95,7 @@ services:
     networks: [ss-prod]
 
   language-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/language-service:prod
+    image: ghcr.io/ingenieria-de-sistemas-123/language-service:latest
     container_name: language-service
     env_file: [.env.prod]
     environment:
@@ -111,7 +111,7 @@ services:
     networks: [ss-prod]
 
   permission-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/permission-service:prod
+    image: ghcr.io/ingenieria-de-sistemas-123/permission-service:latest
     container_name: permission-service
     env_file: [.env.prod]
     environment:
