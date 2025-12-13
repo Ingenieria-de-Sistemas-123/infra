@@ -1,16 +1,27 @@
+# yaml
 services:
-
   permission-service:
     image: ghcr.io/ingenieria-de-sistemas-123/permission-service:dev
     container_name: permission-service
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL_PERMISSIONDB}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME_PERMISSIONDB}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD_PERMISSIONDB}
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI}
+      - AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
     depends_on:
-      - permission-db
+      permission-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+
+#PERMISSION DATABASE
   permission-db:
     image: postgres:16
     container_name: permission-db
@@ -18,23 +29,65 @@ services:
       POSTGRES_DB: ${DB_PERMISSION_NAME}
       POSTGRES_USER: ${DB_PERMISSION_USER}
       POSTGRES_PASSWORD: ${DB_PERMISSION_PASSWORD}
-    ports:
-      - "5432:5432"
-
+    expose: ["5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
 
   snippet-service:
     image: ghcr.io/ingenieria-de-sistemas-123/snippet-service:dev
     container_name: snippet-service
-    ports:
-      - "8081:8080"
+    expose: ["8080"]
     environment:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL_SNIPPET}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME_SNIPPET}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD_SNIPPET}
       - SPRING_PROFILES_ACTIVE=docker
       - LANGUAGE_BASE_URL=http://language-service:8080
+      - ASSET_SERVICE_BASE_URL=${ASSET_SERVICE_BASE_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST}
+      - SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT}
+      - SPRING_DATA_REDIS_URL=${SPRING_DATA_REDIS_URL}
     depends_on:
-      - snippet-db
+      snippet-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+
+  asset-service:
+    image: ghcr.io/austral-ingsis/snippet-asset-service:latest
+    container_name: asset-service
+    expose: ["8080"]
+    environment:
+      AZURE_HOST: ${ASSET_SERVICE_AZURE_HOST}
+      NEW_RELIC_APP_NAME: ${ASSET_SERVICE_NEW_RELIC_APP_NAME}
+      NEW_RELIC_AGENT_ENABLED: ${ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED}
+    depends_on:
+      azurite:
+        condition: service_started
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: azurite
+    hostname: azurite
+    restart: always
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    volumes:
+      - azurite_blob_dev:/workspace
 
   snippet-db:
     image: postgres:16-alpine
@@ -43,17 +96,80 @@ services:
       POSTGRES_DB: ${DB_SNIPPET_NAME}
       POSTGRES_USER: ${DB_SNIPPET_USERNAME}
       POSTGRES_PASSWORD: ${DB_SNIPPET_PASSWORD}
-    ports:
-      - "5433:5432"
+    expose: ["5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
 
+  redis:
+    image: redis:7
+    container_name: redis
+    restart: always
+    expose: ["6379"]
 
   language-service:
     image: ghcr.io/ingenieria-de-sistemas-123/language-service:dev
     container_name: language-service
-    ports:
-      - "8082:8080"
+    expose: ["8080"]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+
+  printscript-ui:
+    container_name: "printscript-ui"
+    image: ghcr.io/ingenieria-de-sistemas-123/printscript-ui:dev
+    expose:
+      - "80"
+    environment:
+        - VITE_AUTH0_DOMAIN=${VITE_AUTH0_DOMAIN}
+        - VITE_AUTH0_CLIENT_ID=${VITE_AUTH0_CLIENT_ID}
+        - VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}
+        - VITE_AUTH0_CALLBACK_URL=${VITE_AUTH0_CALLBACK_URL}
+        - VITE_PERMISSION_BASE_URL=${VITE_PERMISSION_BASE_URL}
+
+  reverse-proxy:
+    image: nginx:alpine
+    container_name: reverse-proxy-dev
+    depends_on:
+      permission-service:
+        condition: service_healthy
+      snippet-service:
+        condition: service_healthy
+      language-service:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/dev.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_www_dev:/var/www/certbot
+      - letsencrypt_dev:/etc/letsencrypt
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot-dev
+    depends_on:
+      - reverse-proxy
+    volumes:
+      - certbot_www_dev:/var/www/certbot
+      - letsencrypt_dev:/etc/letsencrypt
+    entrypoint: /bin/sh
+    command: -c "trap exit TERM; while :; do sleep 12h & wait $!; certbot renew --webroot -w /var/www/certbot --quiet; done"
+
 networks:
   default:
     driver: bridge
+
+volumes:
+  certbot_www_dev:
+  letsencrypt_dev:
+  azurite_blob_dev:

@@ -3,75 +3,188 @@ name: CD (infra)
 on:
   push:
     branches: [ dev, main ]
-  workflow_dispatch:
 
 concurrency:
   group: cd-infra-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy_to_vm:
+  deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
+    env:
+      DEPLOY_ENV: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+      DEPLOY_VM_HOST: ${{ github.ref_name == 'main' && secrets.VM_HOST_PROD || secrets.VM_HOST }}
+      DEPLOY_VM_USER: ${{ github.ref_name == 'main' && secrets.VM_USER_PROD || secrets.VM_USER }}
+      DEPLOY_SSH_KEY_MATERIAL: ${{ github.ref_name == 'main' && secrets.DEPLOY_SSH_KEY_PROD || secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_WORKDIR_PATH: ${{ github.ref_name == 'main' && secrets.DEPLOY_WORKDIR_PROD || secrets.DEPLOY_WORKDIR }}
+      DUCKDNS_DOMAIN: ${{ github.ref_name == 'main' && 'snippet-org-prod.duckdns.org' || 'snippet-org-dev.duckdns.org' }}
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          host: ${{ env.DEPLOY_VM_HOST }}
+          username: ${{ env.DEPLOY_VM_USER }}
+          key: ${{ env.DEPLOY_SSH_KEY_MATERIAL }}
           script_stop: true
           command_timeout: 20m
           script: |
-            set -euo pipefail
+            bash -s <<'EOF'
+            set -Eeuo pipefail
+            trap 'echo "::error::failed at line $LINENO"; exit 1' ERR
+            set -x
 
-            cd "${{ secrets.DEPLOY_WORKDIR }}"
+            cd "${{ env.DEPLOY_WORKDIR_PATH }}"
 
-            BRANCH="${GITHUB_REF_NAME}"
-            if [ "$BRANCH" = "main" ]; then
-              COMPOSE_FILE="docker-compose.yml"        # prod
-            else
-              COMPOSE_FILE="docker-compose.dev.yml"    # dev
-            fi
+            BRANCH='${{ github.ref_name }}'
+            if [ "$BRANCH" = "main" ]; then COMPOSE_FILE="docker-compose.prod.yml"; ENV_FILE=".env.prod"; else COMPOSE_FILE="docker-compose.dev.yml"; ENV_FILE=".env.dev"; fi
 
-            echo "[cd] using compose file: $COMPOSE_FILE"
-            test -f "$COMPOSE_FILE" || { echo "::error file=$COMPOSE_FILE::compose file not found"; exit 1; }
+            echo "[cd] duckdns domain: ${{ env.DUCKDNS_DOMAIN }}"
 
             echo "[cd] sync infra repo to $BRANCH"
             git fetch --all --prune
             git reset --hard "origin/$BRANCH"
 
-            echo "[cd] login to ghcr.io"
+            echo "[cd] using compose file: $COMPOSE_FILE"
+            test -f "$COMPOSE_FILE" || { echo "::error file=$COMPOSE_FILE::compose file not found"; exit 1; }
+
+            echo "[cd] writing $ENV_FILE from secrets"
+            : > "$ENV_FILE"
+
+            # Permission DB
+            echo "DB_PERMISSION_NAME=${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
+            echo "DB_PERMISSION_USER=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
+            echo "DB_PERMISSION_PASSWORD=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_URL_PERMISSIONDB=jdbc:postgresql://permission-db:5432/${{ secrets.DB_PERMISSION_NAME }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_USERNAME_PERMISSIONDB=${{ secrets.DB_PERMISSION_USER }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_PASSWORD_PERMISSIONDB=${{ secrets.DB_PERMISSION_PASSWORD }}" >> "$ENV_FILE"
+
+            # Snippet DB
+            echo "DB_SNIPPET_NAME=${{ secrets.DB_NAME }}" >> "$ENV_FILE"
+            echo "DB_SNIPPET_USERNAME=${{ secrets.DB_USERNAME }}" >> "$ENV_FILE"
+            echo "DB_SNIPPET_PASSWORD=${{ secrets.DB_PASSWORD }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_URL_SNIPPET=jdbc:postgresql://snippet-db:5432/${{ secrets.DB_NAME }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_USERNAME_SNIPPET=${{ secrets.DB_USERNAME }}" >> "$ENV_FILE"
+            echo "SPRING_DATASOURCE_PASSWORD_SNIPPET=${{ secrets.DB_PASSWORD }}" >> "$ENV_FILE"
+
+            # Auth0
+            echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${{ secrets.AUTH0_ISSUER }}" >> "$ENV_FILE"
+            echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}" >> "$ENV_FILE"
+
+            # Dev extras
+            if [ "$ENV_FILE" = ".env.dev" ]; then
+              echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
+              echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
+            fi
+
+            # Redis (obligatorio: secretos deben estar definidos)
+            if [ -z "${{ secrets.REDIS_HOST }}" ]; then
+              echo "::error::REDIS_HOST secret is required"
+              exit 1
+            fi
+            echo "REDIS_HOST=${{ secrets.REDIS_HOST }}" >> "$ENV_FILE"
+
+            if [ -z "${{ secrets.REDIS_PORT }}" ]; then
+              echo "::error::REDIS_PORT secret is required"
+              exit 1
+            fi
+            echo "REDIS_PORT=${{ secrets.REDIS_PORT }}" >> "$ENV_FILE"
+
+            if [ -z "${{ secrets.SPRING_DATA_REDIS_HOST }}" ]; then
+              echo "::error::SPRING_DATA_REDIS_HOST secret is required"
+              exit 1
+            fi
+            echo "SPRING_DATA_REDIS_HOST=${{ secrets.SPRING_DATA_REDIS_HOST }}" >> "$ENV_FILE"
+
+            if [ -z "${{ secrets.SPRING_DATA_REDIS_PORT }}" ]; then
+              echo "::error::SPRING_DATA_REDIS_PORT secret is required"
+              exit 1
+            fi
+            echo "SPRING_DATA_REDIS_PORT=${{ secrets.SPRING_DATA_REDIS_PORT }}" >> "$ENV_FILE"
+
+            if [ -z "${{ secrets.SPRING_DATA_REDIS_URL }}" ]; then
+              echo "::error::SPRING_DATA_REDIS_URL secret is required"
+              exit 1
+            fi
+            echo "SPRING_DATA_REDIS_URL=${{ secrets.SPRING_DATA_REDIS_URL }}" >> "$ENV_FILE"
+
+            # Asset service
+            ASSET_SERVICE_BASE_URL="${{ secrets.ASSET_SERVICE_BASE_URL }}"
+            if [ -z "$ASSET_SERVICE_BASE_URL" ]; then
+              ASSET_SERVICE_BASE_URL="http://asset-service:8080"
+            fi
+            echo "ASSET_SERVICE_BASE_URL=${ASSET_SERVICE_BASE_URL}" >> "$ENV_FILE"
+
+            ASSET_SERVICE_AZURE_HOST="${{ secrets.ASSET_SERVICE_AZURE_HOST }}"
+            if [ -z "$ASSET_SERVICE_AZURE_HOST" ]; then
+              if [ "$ENV_FILE" = ".env.dev" ]; then
+                ASSET_SERVICE_AZURE_HOST="http://azurite"
+              else
+                echo "::error::ASSET_SERVICE_AZURE_HOST secret is required for prod"
+                exit 1
+              fi
+            fi
+            echo "ASSET_SERVICE_AZURE_HOST=${ASSET_SERVICE_AZURE_HOST}" >> "$ENV_FILE"
+
+            echo "ASSET_SERVICE_NEW_RELIC_APP_NAME=${{ secrets.ASSET_SERVICE_NEW_RELIC_APP_NAME }}" >> "$ENV_FILE"
+            echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}" >> "$ENV_FILE"
+
+            # UI variables (se escriben en el env principal para simplificar)
+            echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_CALLBACK_URL=${{ secrets.VITE_AUTH0_CALLBACK_URL }}" >> "$ENV_FILE"
+            echo "VITE_PERMISSION_BASE_URL=${{ secrets.VITE_PERMISSION_BASE_URL }}" >> "$ENV_FILE"
+
+            echo "[cd] login ghcr"
             docker logout ghcr.io >/dev/null 2>&1 || true
-            echo "${{ secrets.GH_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
+            echo "${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER || github.actor }}" --password-stdin
 
-            echo "[cd] deploy ($COMPOSE_FILE)"
-            docker compose -f "$COMPOSE_FILE" pull
-            docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
-            # Opción B (si tu compose soporta --pull always):
-            # docker compose -f "$COMPOSE_FILE" up -d --pull always --remove-orphans
+            if docker compose version >/dev/null 2>&1; then
+              COMPOSE_BIN=(docker compose)
+            elif command -v docker-compose >/dev/null 2>&1; then
+              COMPOSE_BIN=(docker-compose)
+            else
+              echo "::error::Neither 'docker compose' nor 'docker-compose' is available"
+              exit 1
+            fi
 
-            echo "[cd] wait for services"
-            wait_up() {
-              local name="$1" url="$2"
-              echo "→ waiting $name at $url ..."
-              for i in {1..40}; do
-                if curl -fsS "$url" | grep -q '"status":"UP"'; then
-                  echo "✓ $name UP"; return 0
+            compose() {
+              "${COMPOSE_BIN[@]}" "$@"
+            }
+
+            echo "[cd] pull images"
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
+
+            echo "[cd] config"
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
+
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
+
+            # Reemplazo: función de salud sin literales '...'
+            wait_health() {
+              local name="$1"
+              echo "→ esperando salud: $name"
+              for i in $(seq 1 40); do
+                status="$(docker inspect -f '{{ .State.Health.Status }}' "$name" 2>/dev/null || echo starting)"
+                if [ "$status" = "healthy" ]; then
+                  echo "✓ $name healthy"
+                  return 0
                 fi
                 sleep 2
               done
-              echo "::error::$name did not become UP"; return 1
+              echo "::error::$name no alcanzó estado healthy"
+              return 1
             }
 
-            wait_up "permission-service" "http://localhost:8080/actuator/health"
-            wait_up "snippet-service"    "http://localhost:8081/actuator/health"
-            wait_up "language-service"   "http://localhost:8082/actuator/health"
+            wait_health permission-db
+            wait_health snippet-db
+            wait_health permission-service
+            wait_health snippet-service
+            wait_health language-service
 
             echo "[cd] state"
-            docker compose -f "$COMPOSE_FILE" ps
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
 
-            echo "[cd] prune old images"
+            echo "[cd] prune images"
             docker image prune -f
+            EOF

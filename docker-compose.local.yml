@@ -1,0 +1,160 @@
+# Stack local para desarrollo sin HTTPS/Certbot.
+# Objetivo: levantar todos los servicios con puertos mapeados al host para facilitar el debugging.
+# Ventajas:
+# - Simplicidad: no requiere certificados ni dominios.
+# - Observabilidad local: puedes pegarle directo a cada servicio por su puerto.
+# - Opción: usar NGINX como reverse proxy HTTP (sin TLS) o acceder directo por puertos.
+
+name: infra-local
+
+services:
+  # Bases de datos
+  permission-db:
+    image: postgres:16
+    container_name: permission-db-local
+    env_file:
+      - ./env/local/permission-db.env
+    ports:
+      - "15432:5432" # host:container para debug local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  snippet-db:
+    image: postgres:16-alpine
+    container_name: snippet-db-local
+    env_file:
+      - ./env/local/snippet-db.env
+    ports:
+      - "25432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  redis:
+    image: redis:7
+    container_name: redis-local
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # Servicios backend
+  permission-service:
+    image: permission-service
+    container_name: permission-service-local
+    depends_on:
+      permission-db:
+        condition: service_healthy
+    env_file:
+      - ./env/local/permission-service.env
+    ports:
+      - "18080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+
+  language-service:
+    image: language-service
+    container_name: language-service-local
+    env_file:
+      - ./env/local/language-service.env
+    ports:
+      - "18082:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+
+  snippet-service:
+    image: snippet-service
+    container_name: snippet-service-local
+    depends_on:
+      snippet-db:
+        condition: service_healthy
+    env_file:
+      - ./env/local/snippet-service.env
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    ports:
+      - "18081:8080"
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+
+
+  asset-service:
+    image: ghcr.io/austral-ingsis/snippet-asset-service:latest
+    container_name: asset-service-local
+    depends_on:
+      azurite:
+        condition: service_started
+    env_file:
+      - ./env/local/asset-service.env
+    ports:
+      - "18083:8080"
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: azurite-local
+    hostname: azurite
+    restart: always
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    volumes:
+      - azurite_blob_local:/workspace
+
+  # UI
+  printscript-ui:
+    image: printscript-ui
+    container_name: printscript-ui-local
+    env_file:
+      - ./env/local/printscript-ui.env
+    ports:
+      - "3000:80"  # UI accesible en http://localhost:3000
+
+  # Reverse proxy HTTP (opcional en local).
+  # Si prefieres acceder por puertos directos, puedes comentar este servicio.
+  reverse-proxy:
+    image: nginx:alpine
+    container_name: reverse-proxy-local
+    depends_on:
+      permission-service:
+        condition: service_healthy
+      snippet-service:
+        condition: service_healthy
+      language-service:
+        condition: service_healthy
+      printscript-ui:
+        condition: service_started
+    ports:
+      - "8080:80"  # proxy en http://localhost:8080
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/local.conf:/etc/nginx/conf.d/default.conf:ro
+      # Configuración HTTP simple sin SSL pensada para localhost.
+
+networks:
+  default:
+    name: infra_local_default
+    driver: bridge
+
+volumes:
+  azurite_blob_local:
+
