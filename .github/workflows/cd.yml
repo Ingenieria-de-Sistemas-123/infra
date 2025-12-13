@@ -11,13 +11,20 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      DEPLOY_ENV: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+      DEPLOY_VM_HOST: ${{ github.ref_name == 'main' && secrets.VM_HOST_PROD || secrets.VM_HOST }}
+      DEPLOY_VM_USER: ${{ github.ref_name == 'main' && secrets.VM_USER_PROD || secrets.VM_USER }}
+      DEPLOY_SSH_KEY_MATERIAL: ${{ github.ref_name == 'main' && secrets.DEPLOY_SSH_KEY_PROD || secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_WORKDIR_PATH: ${{ github.ref_name == 'main' && secrets.DEPLOY_WORKDIR_PROD || secrets.DEPLOY_WORKDIR }}
+      DUCKDNS_DOMAIN: ${{ github.ref_name == 'main' && 'snippet-org-prod.duckdns.org' || 'snippet-org-dev.duckdns.org' }}
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          host: ${{ env.DEPLOY_VM_HOST }}
+          username: ${{ env.DEPLOY_VM_USER }}
+          key: ${{ env.DEPLOY_SSH_KEY_MATERIAL }}
           script_stop: true
           command_timeout: 20m
           script: |
@@ -26,10 +33,12 @@ jobs:
             trap 'echo "::error::failed at line $LINENO"; exit 1' ERR
             set -x
 
-            cd "${{ secrets.DEPLOY_WORKDIR }}"
+            cd "${{ env.DEPLOY_WORKDIR_PATH }}"
 
             BRANCH='${{ github.ref_name }}'
             if [ "$BRANCH" = "main" ]; then COMPOSE_FILE="docker-compose.prod.yml"; ENV_FILE=".env.prod"; else COMPOSE_FILE="docker-compose.dev.yml"; ENV_FILE=".env.dev"; fi
+
+            echo "[cd] duckdns domain: ${{ env.DUCKDNS_DOMAIN }}"
 
             echo "[cd] sync infra repo to $BRANCH"
             git fetch --all --prune
