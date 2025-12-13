@@ -125,22 +125,28 @@ jobs:
             echo "ASSET_SERVICE_NEW_RELIC_APP_NAME=${{ secrets.ASSET_SERVICE_NEW_RELIC_APP_NAME }}" >> "$ENV_FILE"
             echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}" >> "$ENV_FILE"
 
-            # UI variables: solo cambian las que terminan en _PROD (para prod)
-            if [ -z "${{ secrets.VITE_AUTH0_DOMAIN }}" ]; then
-              echo "::error::VITE_AUTH0_DOMAIN secret is required"
+            # UI variables (prefer *_PROD on prod, fallback to shared secrets)
+            VITE_AUTH0_DOMAIN="${{ github.ref_name == 'main' && secrets.VITE_AUTH0_DOMAIN_PROD || secrets.VITE_AUTH0_DOMAIN }}"
+            VITE_AUTH0_CLIENT_ID="${{ github.ref_name == 'main' && secrets.VITE_AUTH0_CLIENT_ID_PROD || secrets.VITE_AUTH0_CLIENT_ID }}"
+            VITE_AUTH0_AUDIENCE="${{ github.ref_name == 'main' && secrets.VITE_AUTH0_AUDIENCE_PROD || secrets.VITE_AUTH0_AUDIENCE }}"
+            VITE_PERMISSION_BASE_URL="${{ github.ref_name == 'main' && secrets.VITE_PERMISSION_BASE_URL_PROD || secrets.VITE_PERMISSION_BASE_URL }}"
+
+            if [ -z "$VITE_AUTH0_DOMAIN" ]; then
+              echo "::error::VITE_AUTH0_DOMAIN (or VITE_AUTH0_DOMAIN_PROD) secret is required"
               exit 1
             fi
-            if [ -z "${{ secrets.VITE_AUTH0_CLIENT_ID }}" ]; then
-              echo "::error::VITE_AUTH0_CLIENT_ID secret is required"
+            if [ -z "$VITE_AUTH0_CLIENT_ID" ]; then
+              echo "::error::VITE_AUTH0_CLIENT_ID (or VITE_AUTH0_CLIENT_ID_PROD) secret is required"
               exit 1
             fi
-            if [ -z "${{ secrets.VITE_AUTH0_AUDIENCE }}" ]; then
-              echo "::error::VITE_AUTH0_AUDIENCE secret is required"
+            if [ -z "$VITE_AUTH0_AUDIENCE" ]; then
+              echo "::error::VITE_AUTH0_AUDIENCE (or VITE_AUTH0_AUDIENCE_PROD) secret is required"
               exit 1
             fi
-            echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> "$ENV_FILE"
-            echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> "$ENV_FILE"
-            echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> "$ENV_FILE"
+
+            echo "VITE_AUTH0_DOMAIN=$VITE_AUTH0_DOMAIN" >> "$ENV_FILE"
+            echo "VITE_AUTH0_CLIENT_ID=$VITE_AUTH0_CLIENT_ID" >> "$ENV_FILE"
+            echo "VITE_AUTH0_AUDIENCE=$VITE_AUTH0_AUDIENCE" >> "$ENV_FILE"
 
             VITE_AUTH0_CALLBACK_URL=""
             VITE_BACKEND_URL=""
@@ -151,8 +157,6 @@ jobs:
               VITE_AUTH0_CALLBACK_URL="${{ secrets.VITE_AUTH0_CALLBACK_URL }}"
               VITE_BACKEND_URL="${{ secrets.VITE_BACKEND_URL }}"
             fi
-
-            VITE_PERMISSION_BASE_URL="${{ secrets.VITE_PERMISSION_BASE_URL }}"
 
             if [ -z "$VITE_AUTH0_CALLBACK_URL" ]; then
               VITE_AUTH0_CALLBACK_URL="https://${{ env.DUCKDNS_DOMAIN }}/"
@@ -241,6 +245,20 @@ jobs:
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://snippet-service:8080/actuator/health | grep -q UP
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://permission-service:8080/actuator/health | grep -q UP
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://language-service:8080/actuator/health | grep -q UP
+
+            echo "[cd] verify UI assets are served (not HTML)"
+            UI_HTML="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c 'wget -qO- http://printscript-ui:80/' || true)"
+            CSS_PATH="$(printf "%s" "$UI_HTML" | grep -oE '/assets/[^\"\\x27]+\\.css' | head -n1 || true)"
+            JS_PATH="$(printf "%s" "$UI_HTML" | grep -oE '/assets/[^\"\\x27]+\\.js' | head -n1 || true)"
+            if [ -z "$CSS_PATH" ] || [ -z "$JS_PATH" ]; then
+              echo "::error::could not detect UI asset paths in HTML"
+              echo "$UI_HTML" | head -n 80 || true
+              exit 1
+            fi
+            CSS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c \"wget -S -O /dev/null http://printscript-ui:80$CSS_PATH\" 2>&1 || true)"
+            JS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c \"wget -S -O /dev/null http://printscript-ui:80$JS_PATH\" 2>&1 || true)"
+            echo "$CSS_HEADERS" | grep -qiE 'Content-Type:.*text/css' || { echo "::error::UI CSS is not served as text/css"; echo "$CSS_HEADERS"; exit 1; }
+            echo "$JS_HEADERS" | grep -qiE 'Content-Type:.*(application|text)/javascript' || { echo "::error::UI JS is not served as javascript"; echo "$JS_HEADERS"; exit 1; }
 
             echo "[cd] state"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
