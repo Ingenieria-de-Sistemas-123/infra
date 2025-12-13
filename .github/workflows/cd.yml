@@ -123,39 +123,39 @@ jobs:
             fi
             echo "ASSET_SERVICE_AZURE_HOST=${ASSET_SERVICE_AZURE_HOST}" >> "$ENV_FILE"
 
-	            echo "ASSET_SERVICE_NEW_RELIC_APP_NAME=${{ secrets.ASSET_SERVICE_NEW_RELIC_APP_NAME }}" >> "$ENV_FILE"
-	            echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}" >> "$ENV_FILE"
+            echo "ASSET_SERVICE_NEW_RELIC_APP_NAME=${{ secrets.ASSET_SERVICE_NEW_RELIC_APP_NAME }}" >> "$ENV_FILE"
+            echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}" >> "$ENV_FILE"
 
-	            # UI variables: solo cambian las que terminan en _PROD (para prod)
-	            echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> "$ENV_FILE"
-	            echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> "$ENV_FILE"
-	            echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> "$ENV_FILE"
+            # UI variables: solo cambian las que terminan en _PROD (para prod)
+            echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> "$ENV_FILE"
+            echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> "$ENV_FILE"
 
-	            VITE_AUTH0_CALLBACK_URL=""
-	            VITE_BACKEND_URL=""
-	            if [ "$ENV_FILE" = ".env.prod" ]; then
-	              VITE_AUTH0_CALLBACK_URL="${{ secrets.VITE_AUTH0_CALLBACK_URL_PROD }}"
-	              VITE_BACKEND_URL="${{ secrets.VITE_BACKEND_URL_PROD }}"
-	            else
-	              VITE_AUTH0_CALLBACK_URL="${{ secrets.VITE_AUTH0_CALLBACK_URL }}"
-	              VITE_BACKEND_URL="${{ secrets.VITE_BACKEND_URL }}"
-	            fi
+            VITE_AUTH0_CALLBACK_URL=""
+            VITE_BACKEND_URL=""
+            if [ "$ENV_FILE" = ".env.prod" ]; then
+              VITE_AUTH0_CALLBACK_URL="${{ secrets.VITE_AUTH0_CALLBACK_URL_PROD }}"
+              VITE_BACKEND_URL="${{ secrets.VITE_BACKEND_URL_PROD }}"
+            else
+              VITE_AUTH0_CALLBACK_URL="${{ secrets.VITE_AUTH0_CALLBACK_URL }}"
+              VITE_BACKEND_URL="${{ secrets.VITE_BACKEND_URL }}"
+            fi
 
-	            VITE_PERMISSION_BASE_URL="${{ secrets.VITE_PERMISSION_BASE_URL }}"
+            VITE_PERMISSION_BASE_URL="${{ secrets.VITE_PERMISSION_BASE_URL }}"
 
-	            if [ -z "$VITE_AUTH0_CALLBACK_URL" ]; then
-	              VITE_AUTH0_CALLBACK_URL="https://${{ env.DUCKDNS_DOMAIN }}/"
-	            fi
-	            if [ -z "$VITE_PERMISSION_BASE_URL" ]; then
-	              VITE_PERMISSION_BASE_URL="/api"
-	            fi
-	            if [ -z "$VITE_BACKEND_URL" ]; then
-	              VITE_BACKEND_URL="https://${{ env.DUCKDNS_DOMAIN }}/api"
-	            fi
+            if [ -z "$VITE_AUTH0_CALLBACK_URL" ]; then
+              VITE_AUTH0_CALLBACK_URL="https://${{ env.DUCKDNS_DOMAIN }}/"
+            fi
+            if [ -z "$VITE_PERMISSION_BASE_URL" ]; then
+              VITE_PERMISSION_BASE_URL="/api"
+            fi
+            if [ -z "$VITE_BACKEND_URL" ]; then
+              VITE_BACKEND_URL="https://${{ env.DUCKDNS_DOMAIN }}/api"
+            fi
 
-	            echo "VITE_AUTH0_CALLBACK_URL=$VITE_AUTH0_CALLBACK_URL" >> "$ENV_FILE"
-	            echo "VITE_PERMISSION_BASE_URL=$VITE_PERMISSION_BASE_URL" >> "$ENV_FILE"
-	            echo "VITE_BACKEND_URL=$VITE_BACKEND_URL" >> "$ENV_FILE"
+            echo "VITE_AUTH0_CALLBACK_URL=$VITE_AUTH0_CALLBACK_URL" >> "$ENV_FILE"
+            echo "VITE_PERMISSION_BASE_URL=$VITE_PERMISSION_BASE_URL" >> "$ENV_FILE"
+            echo "VITE_BACKEND_URL=$VITE_BACKEND_URL" >> "$ENV_FILE"
 
             echo "[cd] login ghcr"
             docker logout ghcr.io >/dev/null 2>&1 || true
