@@ -6,9 +6,9 @@ services:
     container_name: snippet-db
     env_file: [.env.prod]
     environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_SNIPPET_NAME}
+      POSTGRES_USER: ${DB_SNIPPET_USERNAME}
+      POSTGRES_PASSWORD: ${DB_SNIPPET_PASSWORD}
     expose: ["5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
@@ -18,6 +18,19 @@ services:
       start_period: 10s
     volumes:
       - pg_data_prod:/var/lib/postgresql/data
+    networks: [ss-prod]
+
+  redis:
+    image: redis:7
+    container_name: redis
+    restart: always
+    expose: ["6379"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
     networks: [ss-prod]
 
   permission-db:
@@ -40,21 +53,29 @@ services:
     networks: [ss-prod]
 
   snippet-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/snippet-service:prod
+    image: ghcr.io/ingenieria-de-sistemas-123/snippet-service:latest
     container_name: snippet-service
     depends_on:
       snippet-db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file: [.env.prod]
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://snippet-db:5432/${DB_NAME}
-      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_SNIPPET}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME_SNIPPET}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD_SNIPPET}
+      LANGUAGE_BASE_URL: ${LANGUAGE_BASE_URL}
       ASSET_SERVICE_BASE_URL: ${ASSET_SERVICE_BASE_URL}
       NEW_RELIC_APP_NAME: 'SnippetSearcher-Backend'
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
       JAVA_TOOL_OPTIONS: -javaagent:/newrelic/newrelic.jar
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST}
+      SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT}
+      SPRING_DATA_REDIS_URL: ${SPRING_DATA_REDIS_URL}
     expose: ["8080"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
@@ -93,7 +114,7 @@ services:
     networks: [ss-prod]
 
   language-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/language-service:prod
+    image: ghcr.io/ingenieria-de-sistemas-123/language-service:latest
     container_name: language-service
     env_file: [.env.prod]
     environment:
@@ -111,15 +132,25 @@ services:
     restart: unless-stopped
     networks: [ss-prod]
 
+  printscript-ui:
+    container_name: printscript-ui
+    image: ghcr.io/ingenieria-de-sistemas-123/printscript-ui:latest
+    env_file: [.env.prod]
+    expose: ["80"]
+    restart: unless-stopped
+    networks: [ss-prod]
+
   permission-service:
-      image: ghcr.io/ingenieria-de-sistemas-123/permission-service:prod
+      image: ghcr.io/ingenieria-de-sistemas-123/permission-service:latest
       container_name: permission-service
       env_file: [.env.prod]
       environment:
         SPRING_PROFILES_ACTIVE: docker
-        SPRING_DATASOURCE_URL: jdbc:postgresql://permission-db:5432/${DB_PERMISSION_NAME}
-        SPRING_DATASOURCE_USERNAME: ${DB_PERMISSION_USER}
-        SPRING_DATASOURCE_PASSWORD: ${DB_PERMISSION_PASSWORD}
+        SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_PERMISSIONDB}
+        SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME_PERMISSIONDB}
+        SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD_PERMISSIONDB}
+        SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI}
+        AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
         NEW_RELIC_APP_NAME: 'SnippetSearcher-Permission'
         NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
         JAVA_TOOL_OPTIONS: -javaagent:/newrelic/newrelic.jar
@@ -146,6 +177,8 @@ services:
         condition: service_healthy
       permission-service:
         condition: service_healthy
+      printscript-ui:
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"

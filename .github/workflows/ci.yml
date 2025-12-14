@@ -37,6 +37,11 @@ jobs:
           ASSET_SERVICE_NEW_RELIC_APP_NAME="${{ secrets.ASSET_SERVICE_NEW_RELIC_APP_NAME }}"
           ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED="${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}"
           ASSET_SERVICE_BASE_URL="${{ secrets.ASSET_SERVICE_BASE_URL }}"
+          REDIS_HOST="${{ secrets.REDIS_HOST }}"
+          REDIS_PORT="${{ secrets.REDIS_PORT }}"
+          SPRING_DATA_REDIS_HOST="${{ secrets.SPRING_DATA_REDIS_HOST }}"
+          SPRING_DATA_REDIS_PORT="${{ secrets.SPRING_DATA_REDIS_PORT }}"
+          SPRING_DATA_REDIS_URL="${{ secrets.SPRING_DATA_REDIS_URL }}"
           VITE_AUTH0_DOMAIN="${{ secrets.VITE_AUTH0_DOMAIN }}"
           VITE_AUTH0_CLIENT_ID="${{ secrets.VITE_AUTH0_CLIENT_ID }}"
           VITE_AUTH0_AUDIENCE="${{ secrets.VITE_AUTH0_AUDIENCE }}"
@@ -46,6 +51,12 @@ jobs:
           if [ -z "$ASSET_SERVICE_BASE_URL" ]; then
             ASSET_SERVICE_BASE_URL="http://asset-service:8080"
           fi
+
+          if [ -z "$REDIS_HOST" ]; then REDIS_HOST="redis"; fi
+          if [ -z "$REDIS_PORT" ]; then REDIS_PORT="6379"; fi
+          if [ -z "$SPRING_DATA_REDIS_HOST" ]; then SPRING_DATA_REDIS_HOST="redis"; fi
+          if [ -z "$SPRING_DATA_REDIS_PORT" ]; then SPRING_DATA_REDIS_PORT="6379"; fi
+          if [ -z "$SPRING_DATA_REDIS_URL" ]; then SPRING_DATA_REDIS_URL="redis://redis:6379"; fi
 
           {
             echo "DB_PERMISSION_NAME=${DB_PERMISSION_NAME}"
@@ -66,6 +77,11 @@ jobs:
             echo "ASSET_SERVICE_AZURE_HOST=${ASSET_SERVICE_AZURE_HOST}"
             echo "ASSET_SERVICE_NEW_RELIC_APP_NAME=${ASSET_SERVICE_NEW_RELIC_APP_NAME}"
             echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED}"
+            echo "REDIS_HOST=${REDIS_HOST}"
+            echo "REDIS_PORT=${REDIS_PORT}"
+            echo "SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST}"
+            echo "SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT}"
+            echo "SPRING_DATA_REDIS_URL=${SPRING_DATA_REDIS_URL}"
             echo "VITE_AUTH0_DOMAIN=${VITE_AUTH0_DOMAIN}"
             echo "VITE_AUTH0_CLIENT_ID=${VITE_AUTH0_CLIENT_ID}"
             echo "VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}"
@@ -74,6 +90,8 @@ jobs:
           } >> "$file"
 
           echo "Archivo .env.ci.dev generado."
+          # docker-compose.dev.yml referencia env_file: .env.dev para printscript-ui
+          cp .env.ci.dev .env.dev
 
       - name: Validar docker compose
         run: docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev config
@@ -137,3 +155,7 @@ jobs:
       - name: Borrar archivo temporal .env.ci.dev
         if: always()
         run: rm -f .env.ci.dev
+      
+      - name: Borrar archivo temporal .env.dev
+        if: always()
+        run: rm -f .env.dev

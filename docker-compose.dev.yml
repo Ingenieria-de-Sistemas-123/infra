@@ -135,14 +135,9 @@ services:
   printscript-ui:
     container_name: "printscript-ui"
     image: ghcr.io/ingenieria-de-sistemas-123/printscript-ui:dev
+    env_file: [.env.dev]
     expose:
       - "80"
-    environment:
-        - VITE_AUTH0_DOMAIN=${VITE_AUTH0_DOMAIN}
-        - VITE_AUTH0_CLIENT_ID=${VITE_AUTH0_CLIENT_ID}
-        - VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}
-        - VITE_AUTH0_CALLBACK_URL=${VITE_AUTH0_CALLBACK_URL}
-        - VITE_PERMISSION_BASE_URL=${VITE_PERMISSION_BASE_URL}
 
   reverse-proxy:
     image: nginx:alpine

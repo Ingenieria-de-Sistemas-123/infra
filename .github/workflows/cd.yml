@@ -11,25 +11,33 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      DEPLOY_ENV: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+      DEPLOY_VM_HOST: ${{ github.ref_name == 'main' && secrets.VM_HOST_PROD || secrets.VM_HOST }}
+      DEPLOY_VM_USER: ${{ github.ref_name == 'main' && secrets.VM_USER_PROD || secrets.VM_USER }}
+      DEPLOY_SSH_KEY_MATERIAL: ${{ github.ref_name == 'main' && secrets.DEPLOY_SSH_KEY_PROD || secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_WORKDIR_PATH: ${{ github.ref_name == 'main' && secrets.DEPLOY_WORKDIR_PROD || secrets.DEPLOY_WORKDIR }}
+      DUCKDNS_DOMAIN: ${{ github.ref_name == 'main' && 'snippet-org-prod.duckdns.org' || 'snippet-org-dev.duckdns.org' }}
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script_stop: true
+          host: ${{ env.DEPLOY_VM_HOST }}
+          username: ${{ env.DEPLOY_VM_USER }}
+          key: ${{ env.DEPLOY_SSH_KEY_MATERIAL }}
+          script_stop: false
           command_timeout: 20m
           script: |
             bash -s <<'EOF'
             set -Eeuo pipefail
             trap 'echo "::error::failed at line $LINENO"; exit 1' ERR
-            set -x
 
-            cd "${{ secrets.DEPLOY_WORKDIR }}"
+            cd "${{ env.DEPLOY_WORKDIR_PATH }}"
 
             BRANCH='${{ github.ref_name }}'
             if [ "$BRANCH" = "main" ]; then COMPOSE_FILE="docker-compose.prod.yml"; ENV_FILE=".env.prod"; else COMPOSE_FILE="docker-compose.dev.yml"; ENV_FILE=".env.dev"; fi
+
+            echo "[cd] duckdns domain: ${{ env.DUCKDNS_DOMAIN }}"
 
             echo "[cd] sync infra repo to $BRANCH"
             git fetch --all --prune
@@ -61,11 +69,9 @@ jobs:
             echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${{ secrets.AUTH0_ISSUER }}" >> "$ENV_FILE"
             echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}" >> "$ENV_FILE"
 
-            # Dev extras
-            if [ "$ENV_FILE" = ".env.dev" ]; then
-              echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
-              echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
-            fi
+            # Shared defaults (dev/prod)
+            echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
+            echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
 
             # Redis (obligatorio: secretos deben estar definidos)
             if [ -z "${{ secrets.REDIS_HOST }}" ]; then
@@ -119,12 +125,52 @@ jobs:
             echo "ASSET_SERVICE_NEW_RELIC_APP_NAME=${{ secrets.ASSET_SERVICE_NEW_RELIC_APP_NAME }}" >> "$ENV_FILE"
             echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}" >> "$ENV_FILE"
 
-            # UI variables (se escriben en el env principal para simplificar)
-            echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> "$ENV_FILE"
-            echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> "$ENV_FILE"
-            echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> "$ENV_FILE"
-            echo "VITE_AUTH0_CALLBACK_URL=${{ secrets.VITE_AUTH0_CALLBACK_URL }}" >> "$ENV_FILE"
-            echo "VITE_PERMISSION_BASE_URL=${{ secrets.VITE_PERMISSION_BASE_URL }}" >> "$ENV_FILE"
+            # UI variables (prefer *_PROD on prod, fallback to shared secrets)
+            VITE_AUTH0_DOMAIN="${{ github.ref_name == 'main' && secrets.VITE_AUTH0_DOMAIN_PROD || secrets.VITE_AUTH0_DOMAIN }}"
+            VITE_AUTH0_CLIENT_ID="${{ github.ref_name == 'main' && secrets.VITE_AUTH0_CLIENT_ID_PROD || secrets.VITE_AUTH0_CLIENT_ID }}"
+            VITE_AUTH0_AUDIENCE="${{ github.ref_name == 'main' && secrets.VITE_AUTH0_AUDIENCE_PROD || secrets.VITE_AUTH0_AUDIENCE }}"
+            VITE_PERMISSION_BASE_URL="${{ github.ref_name == 'main' && secrets.VITE_PERMISSION_BASE_URL_PROD || secrets.VITE_PERMISSION_BASE_URL }}"
+
+            if [ -z "$VITE_AUTH0_DOMAIN" ]; then
+              echo "::error::VITE_AUTH0_DOMAIN (or VITE_AUTH0_DOMAIN_PROD) secret is required"
+              exit 1
+            fi
+            if [ -z "$VITE_AUTH0_CLIENT_ID" ]; then
+              echo "::error::VITE_AUTH0_CLIENT_ID (or VITE_AUTH0_CLIENT_ID_PROD) secret is required"
+              exit 1
+            fi
+            if [ -z "$VITE_AUTH0_AUDIENCE" ]; then
+              echo "::error::VITE_AUTH0_AUDIENCE (or VITE_AUTH0_AUDIENCE_PROD) secret is required"
+              exit 1
+            fi
+
+            echo "VITE_AUTH0_DOMAIN=$VITE_AUTH0_DOMAIN" >> "$ENV_FILE"
+            echo "VITE_AUTH0_CLIENT_ID=$VITE_AUTH0_CLIENT_ID" >> "$ENV_FILE"
+            echo "VITE_AUTH0_AUDIENCE=$VITE_AUTH0_AUDIENCE" >> "$ENV_FILE"
+
+            VITE_AUTH0_CALLBACK_URL=""
+            VITE_BACKEND_URL=""
+            if [ "$ENV_FILE" = ".env.prod" ]; then
+              VITE_AUTH0_CALLBACK_URL="${{ secrets.VITE_AUTH0_CALLBACK_URL_PROD }}"
+              VITE_BACKEND_URL="${{ secrets.VITE_BACKEND_URL_PROD }}"
+            else
+              VITE_AUTH0_CALLBACK_URL="${{ secrets.VITE_AUTH0_CALLBACK_URL }}"
+              VITE_BACKEND_URL="${{ secrets.VITE_BACKEND_URL }}"
+            fi
+
+            if [ -z "$VITE_AUTH0_CALLBACK_URL" ]; then
+              VITE_AUTH0_CALLBACK_URL="https://${{ env.DUCKDNS_DOMAIN }}/"
+            fi
+            if [ -z "$VITE_PERMISSION_BASE_URL" ]; then
+              VITE_PERMISSION_BASE_URL="/api"
+            fi
+            if [ -z "$VITE_BACKEND_URL" ]; then
+              VITE_BACKEND_URL="https://${{ env.DUCKDNS_DOMAIN }}/api"
+            fi
+
+            echo "VITE_AUTH0_CALLBACK_URL=$VITE_AUTH0_CALLBACK_URL" >> "$ENV_FILE"
+            echo "VITE_PERMISSION_BASE_URL=$VITE_PERMISSION_BASE_URL" >> "$ENV_FILE"
+            echo "VITE_BACKEND_URL=$VITE_BACKEND_URL" >> "$ENV_FILE"
 
             echo "[cd] login ghcr"
             docker logout ghcr.io >/dev/null 2>&1 || true
@@ -149,7 +195,17 @@ jobs:
             echo "[cd] config"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
 
-            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
+            if ! compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans; then
+              echo "::error::docker compose up failed"
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 snippet-service || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 snippet-db || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 redis || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 permission-service || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 permission-db || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 language-service || true
+              exit 1
+            fi
 
             # Reemplazo: función de salud sin literales '...'
             wait_health() {
@@ -164,6 +220,8 @@ jobs:
                 sleep 2
               done
               echo "::error::$name no alcanzó estado healthy"
+              echo "[cd] logs $name (tail 200)"
+              docker logs --tail 200 "$name" || true
               return 1
             }
 
@@ -172,6 +230,35 @@ jobs:
             wait_health permission-service
             wait_health snippet-service
             wait_health language-service
+
+            echo "[cd] restart reverse-proxy (refresh upstream DNS)"
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart reverse-proxy
+
+            echo "[cd] verify reverse-proxy upstream connectivity"
+            if ! compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://printscript-ui:80/ >/dev/null; then
+              echo "::error::reverse-proxy cannot reach printscript-ui"
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 reverse-proxy || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 printscript-ui || true
+              exit 1
+            fi
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://snippet-service:8080/actuator/health | grep -q UP
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://permission-service:8080/actuator/health | grep -q UP
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://language-service:8080/actuator/health | grep -q UP
+
+            echo "[cd] verify UI assets are served (not HTML)"
+            UI_HTML="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c 'wget -qO- http://printscript-ui:80/' || true)"
+            CSS_PATH="$(printf "%s" "$UI_HTML" | grep -oE '/assets/[^\"\\x27]+\\.css' | head -n1 || true)"
+            JS_PATH="$(printf "%s" "$UI_HTML" | grep -oE '/assets/[^\"\\x27]+\\.js' | head -n1 || true)"
+            if [ -z "$CSS_PATH" ] || [ -z "$JS_PATH" ]; then
+              echo "::error::could not detect UI asset paths in HTML"
+              echo "$UI_HTML" | head -n 80 || true
+              exit 1
+            fi
+            CSS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c \"wget -S -O /dev/null http://printscript-ui:80$CSS_PATH\" 2>&1 || true)"
+            JS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c \"wget -S -O /dev/null http://printscript-ui:80$JS_PATH\" 2>&1 || true)"
+            echo "$CSS_HEADERS" | grep -qiE 'Content-Type:.*text/css' || { echo "::error::UI CSS is not served as text/css"; echo "$CSS_HEADERS"; exit 1; }
+            echo "$JS_HEADERS" | grep -qiE 'Content-Type:.*(application|text)/javascript' || { echo "::error::UI JS is not served as javascript"; echo "$JS_HEADERS"; exit 1; }
 
             echo "[cd] state"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
