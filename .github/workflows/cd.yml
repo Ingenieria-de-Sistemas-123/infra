@@ -200,6 +200,72 @@ jobs:
             echo "[cd] pull images"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 
+            # New Relic Java agent (montado desde el host en ./newrelic -> /newrelic)
+            NEW_RELIC_JAVA_TOOL_OPTIONS=""
+            NR_DIR="newrelic"
+            NR_JAR_FILE="${NR_DIR}/newrelic.jar"
+            NR_CFG_FILE="${NR_DIR}/newrelic.yml"
+
+            if [ -n "$NEW_RELIC_LICENSE_KEY" ]; then
+              mkdir -p "$NR_DIR"
+
+              if [ ! -f "$NR_JAR_FILE" ]; then
+                echo "[cd] download New Relic Java agent"
+                NR_ZIP_URL="https://download.newrelic.com/newrelic/java-agent/newrelic-agent/current/newrelic-java.zip"
+                tmp="$(mktemp -d)"
+                zip_path="$tmp/newrelic-java.zip"
+
+                if command -v curl >/dev/null 2>&1; then
+                  curl -fsSL "$NR_ZIP_URL" -o "$zip_path" || true
+                elif command -v wget >/dev/null 2>&1; then
+                  wget -qO "$zip_path" "$NR_ZIP_URL" || true
+                else
+                  echo "::warning::curl/wget not available; cannot download New Relic agent automatically"
+                fi
+
+                if [ -f "$zip_path" ]; then
+                  if command -v unzip >/dev/null 2>&1; then
+                    unzip -q "$zip_path" -d "$tmp" || true
+                  elif command -v python3 >/dev/null 2>&1; then
+                    python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$zip_path" "$tmp" || true
+                  else
+                    echo "::warning::unzip/python3 not available; cannot extract New Relic agent zip"
+                  fi
+
+                  if [ -f "$tmp/newrelic/newrelic.jar" ]; then
+                    cp "$tmp/newrelic/newrelic.jar" "$NR_JAR_FILE"
+                  else
+                    echo "::warning::New Relic zip extracted but newrelic/newrelic.jar not found"
+                  fi
+                fi
+
+                rm -rf "$tmp" || true
+              fi
+
+              if [ ! -f "$NR_JAR_FILE" ]; then
+                echo "[cd] fallback: download New Relic agent via docker"
+                docker run --rm -v "$PWD/$NR_DIR":/out python:3-alpine \
+                  python -c "import io,urllib.request,zipfile; data=urllib.request.urlopen('https://download.newrelic.com/newrelic/java-agent/newrelic-agent/current/newrelic-java.zip').read(); z=zipfile.ZipFile(io.BytesIO(data)); open('/out/newrelic.jar','wb').write(z.read('newrelic/newrelic.jar'))" \
+                  || true
+              fi
+
+              if [ ! -f "$NR_CFG_FILE" ]; then
+                printf '%s\n' \
+                  'common: &default_settings' \
+                  '  distributed_tracing:' \
+                  '    enabled: true' \
+                  > "$NR_CFG_FILE"
+              fi
+
+              if [ -f "$NR_JAR_FILE" ]; then
+                NEW_RELIC_JAVA_TOOL_OPTIONS="-javaagent:/newrelic/newrelic.jar"
+              else
+                echo "::warning::New Relic jar missing; running without -javaagent"
+              fi
+            fi
+
+            echo "NEW_RELIC_JAVA_TOOL_OPTIONS=$NEW_RELIC_JAVA_TOOL_OPTIONS" >> "$ENV_FILE"
+
             echo "[cd] config"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
 
