@@ -47,6 +47,10 @@ jobs:
           VITE_AUTH0_AUDIENCE="${{ secrets.VITE_AUTH0_AUDIENCE }}"
           VITE_AUTH0_CALLBACK_URL="${{ secrets.VITE_AUTH0_CALLBACK_URL }}"
           VITE_PERMISSION_BASE_URL="${{ secrets.VITE_PERMISSION_BASE_URL }}"
+          NEW_RELIC_LICENSE_KEY="${{ secrets.NEW_RELIC_LICENSE_KEY }}"
+
+          # En CI deshabilitamos el javaagent (las imágenes dev no siempre incluyen el JAR)
+          NEW_RELIC_JAVA_TOOL_OPTIONS=""
 
           if [ -z "$ASSET_SERVICE_BASE_URL" ]; then
             ASSET_SERVICE_BASE_URL="http://asset-service:8080"
@@ -87,6 +91,8 @@ jobs:
             echo "VITE_AUTH0_AUDIENCE=${VITE_AUTH0_AUDIENCE}"
             echo "VITE_AUTH0_CALLBACK_URL=${VITE_AUTH0_CALLBACK_URL}"
             echo "VITE_PERMISSION_BASE_URL=${VITE_PERMISSION_BASE_URL}"
+            echo "NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}"
+            echo "NEW_RELIC_JAVA_TOOL_OPTIONS=${NEW_RELIC_JAVA_TOOL_OPTIONS}"
           } >> "$file"
 
           echo "Archivo .env.ci.dev generado."

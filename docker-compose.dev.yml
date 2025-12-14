@@ -11,6 +11,12 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD_PERMISSIONDB}
       - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI}
       - AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
+      - NEW_RELIC_APP_NAME=SnippetSearcher-Permission
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
+      - NEW_RELIC_CONFIG_FILE=/newrelic/newrelic.yml
+      - JAVA_TOOL_OPTIONS=${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
+    volumes:
+      - ./newrelic:/newrelic:ro
     depends_on:
       permission-db:
         condition: service_healthy
@@ -53,6 +59,12 @@ services:
       - SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST}
       - SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT}
       - SPRING_DATA_REDIS_URL=${SPRING_DATA_REDIS_URL}
+      - NEW_RELIC_APP_NAME=SnippetSearcher-Backend
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
+      - NEW_RELIC_CONFIG_FILE=/newrelic/newrelic.yml
+      - JAVA_TOOL_OPTIONS=${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
+    volumes:
+      - ./newrelic:/newrelic:ro
     depends_on:
       snippet-db:
         condition: service_healthy
@@ -116,6 +128,12 @@ services:
     expose: ["8080"]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
+      - NEW_RELIC_APP_NAME=SnippetSearcher-Language
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
+      - NEW_RELIC_CONFIG_FILE=/newrelic/newrelic.yml
+      - JAVA_TOOL_OPTIONS=${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
+    volumes:
+      - ./newrelic:/newrelic:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
       interval: 5s
