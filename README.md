@@ -89,8 +89,8 @@ Precondiciones:
 Pasos:
 ```bash
 # 1. Levantar stack
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d --remove-orphans
+docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans
 
 # 2. Emitir certificado inicial
 docker compose -f docker-compose.prod.yml run --rm certbot certbot certonly --webroot -w /var/www/certbot -d snippet-org-prod.duckdns.org --email ing.sistemas.123.encrypt@gmail.com --agree-tos --no-eff-email
