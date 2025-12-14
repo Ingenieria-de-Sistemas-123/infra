@@ -68,6 +68,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD_SNIPPET}
       LANGUAGE_BASE_URL: ${LANGUAGE_BASE_URL}
       ASSET_SERVICE_BASE_URL: ${ASSET_SERVICE_BASE_URL}
+      NEW_RELIC_APP_NAME: 'SnippetSearcher-Backend'
+      NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
+      JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS--javaagent:/newrelic/newrelic.jar}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST}
@@ -116,6 +119,9 @@ services:
     env_file: [.env.prod]
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      NEW_RELIC_APP_NAME: 'SnippetSearcher-Language'
+      NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
+      JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS--javaagent:/newrelic/newrelic.jar}
     expose: ["8080"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
@@ -135,28 +141,31 @@ services:
     networks: [ss-prod]
 
   permission-service:
-    image: ghcr.io/ingenieria-de-sistemas-123/permission-service:latest
-    container_name: permission-service
-    env_file: [.env.prod]
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_PERMISSIONDB}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME_PERMISSIONDB}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD_PERMISSIONDB}
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI}
-      AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
-    depends_on:
-      permission-db:
-        condition: service_healthy
-    expose: ["8080"]
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-      start_period: 15s
-    restart: unless-stopped
-    networks: [ss-prod]
+      image: ghcr.io/ingenieria-de-sistemas-123/permission-service:latest
+      container_name: permission-service
+      env_file: [.env.prod]
+      environment:
+        SPRING_PROFILES_ACTIVE: docker
+        SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_PERMISSIONDB}
+        SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME_PERMISSIONDB}
+        SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD_PERMISSIONDB}
+        SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI}
+        AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
+        NEW_RELIC_APP_NAME: 'SnippetSearcher-Permission'
+        NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
+        JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS--javaagent:/newrelic/newrelic.jar}
+      depends_on:
+        permission-db:
+          condition: service_healthy
+      expose: ["8080"]
+      healthcheck:
+        test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+        interval: 5s
+        timeout: 3s
+        retries: 30
+        start_period: 15s
+      restart: unless-stopped
+      networks: [ss-prod]
 
   reverse-proxy:
     image: nginx:alpine

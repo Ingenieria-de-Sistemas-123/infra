@@ -73,6 +73,14 @@ jobs:
             echo "SPRING_PROFILES_ACTIVE=docker" >> "$ENV_FILE"
             echo "LANGUAGE_BASE_URL=http://language-service:8080" >> "$ENV_FILE"
 
+            # New Relic
+            NEW_RELIC_LICENSE_KEY="${{ secrets.NEW_RELIC_LICENSE_KEY }}"
+            if [ -z "$NEW_RELIC_LICENSE_KEY" ]; then
+              echo "::warning::NEW_RELIC_LICENSE_KEY secret is not set; New Relic will be disabled"
+            else
+              echo "NEW_RELIC_LICENSE_KEY=$NEW_RELIC_LICENSE_KEY" >> "$ENV_FILE"
+            fi
+
             # Redis (obligatorio: secretos deben estar definidos)
             if [ -z "${{ secrets.REDIS_HOST }}" ]; then
               echo "::error::REDIS_HOST secret is required"
