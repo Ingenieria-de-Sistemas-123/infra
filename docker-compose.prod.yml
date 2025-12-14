@@ -70,7 +70,7 @@ services:
       ASSET_SERVICE_BASE_URL: ${ASSET_SERVICE_BASE_URL}
       NEW_RELIC_APP_NAME: 'SnippetSearcher-Backend'
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
-      JAVA_TOOL_OPTIONS: -javaagent:/newrelic/newrelic.jar
+      JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS--javaagent:/newrelic/newrelic.jar}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST}
@@ -121,7 +121,7 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       NEW_RELIC_APP_NAME: 'SnippetSearcher-Language'
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
-      JAVA_TOOL_OPTIONS: -javaagent:/newrelic/newrelic.jar
+      JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS--javaagent:/newrelic/newrelic.jar}
     expose: ["8080"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
@@ -153,7 +153,7 @@ services:
         AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
         NEW_RELIC_APP_NAME: 'SnippetSearcher-Permission'
         NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
-        JAVA_TOOL_OPTIONS: -javaagent:/newrelic/newrelic.jar
+        JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS--javaagent:/newrelic/newrelic.jar}
       depends_on:
         permission-db:
           condition: service_healthy
