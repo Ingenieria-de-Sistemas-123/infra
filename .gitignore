@@ -4,3 +4,8 @@
 
 # Local service env files
 env/local/*.env
+/.idea/copilot.data.migration.ask2agent.xml
+/.idea/infra.iml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/vcs.xml
