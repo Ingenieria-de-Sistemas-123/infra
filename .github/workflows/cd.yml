@@ -35,7 +35,7 @@ jobs:
             cd "${{ env.DEPLOY_WORKDIR_PATH }}"
 
             BRANCH='${{ github.ref_name }}'
-            if [ "$BRANCH" = "main" ]; then COMPOSE_FILE="docker-compose.prod.yml"; ENV_FILE=".env.prod"; PROJECT_NAME="infra-prod"; else COMPOSE_FILE="docker-compose.dev.yml"; ENV_FILE=".env.dev"; PROJECT_NAME="infra-dev"; fi
+            if [ "$BRANCH" = "main" ]; then COMPOSE_FILE="docker-compose.prod.yml"; ENV_FILE=".env.prod"; PROJECT_NAME="infra-prod"; PROXY_SERVICE="reverse-proxy"; else COMPOSE_FILE="docker-compose.dev.yml"; ENV_FILE=".env.dev"; PROJECT_NAME="infra-dev"; PROXY_SERVICE="reverse-proxy-dev"; fi
 
             echo "[cd] duckdns domain: ${{ env.DUCKDNS_DOMAIN }}"
 
@@ -288,13 +288,34 @@ jobs:
             echo "[cd] skipping docker health checks"
 
             echo "[cd] restart reverse-proxy (refresh upstream DNS)"
-            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart reverse-proxy
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart "$PROXY_SERVICE"
+
+            # Esperar a que el contenedor de reverse-proxy esté en ejecución tras el restart
+            echo "[cd] wait $PROXY_SERVICE running"
+            for i in $(seq 1 30); do
+              cid="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps -q "$PROXY_SERVICE" || true)"
+              if [ -n "$cid" ]; then
+                running="$(docker inspect -f '{{.State.Running}}' "$cid" 2>/dev/null || echo false)"
+                if [ "$running" = "true" ]; then
+                  echo "✓ $PROXY_SERVICE running ($cid)"
+                  break
+                fi
+              fi
+              sleep 1
+            done
 
             echo "[cd] verify reverse-proxy upstream connectivity"
-            if ! compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://printscript-ui:80/ >/dev/null; then
+            ok=false
+            for i in $(seq 1 10); do
+              if compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T "$PROXY_SERVICE" wget -qO- http://printscript-ui:80/ >/dev/null; then
+                ok=true; break
+              fi
+              sleep 2
+            done
+            if [ "$ok" != true ]; then
               echo "::error::reverse-proxy cannot reach printscript-ui"
               compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps || true
-              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 reverse-proxy || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 "$PROXY_SERVICE" || true
               compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 printscript-ui || true
               exit 1
             fi
@@ -303,16 +324,16 @@ jobs:
             check_health_via_proxy() {
               local svc="$1"
               local url="http://$svc:8080/actuator/health"
-              echo "→ reverse-proxy -> $url"
+              echo "→ $PROXY_SERVICE -> $url"
               for i in $(seq 1 10); do
-                if compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c "wget -qO- $url" | grep -q UP; then
-                  echo "✓ $svc UP via reverse-proxy"
+                if compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T "$PROXY_SERVICE" sh -c "wget -qO- $url" | grep -q UP; then
+                  echo "✓ $svc UP via $PROXY_SERVICE"
                   return 0
                 fi
                 sleep 2
               done
-              echo "::error::reverse-proxy cannot reach $svc or health not UP"
-              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 reverse-proxy || true
+              echo "::error::$PROXY_SERVICE cannot reach $svc or health not UP"
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 "$PROXY_SERVICE" || true
               compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 "$svc" || true
               return 1
             }
@@ -322,7 +343,7 @@ jobs:
             check_health_via_proxy language-service || exit 1
 
             echo "[cd] verify UI assets are served (not HTML)"
-            UI_HTML="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c 'wget -qO- http://printscript-ui:80/' || true)"
+            UI_HTML="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T "$PROXY_SERVICE" sh -c 'wget -qO- http://printscript-ui:80/' || true)"
             CSS_PATH="$(printf "%s" "$UI_HTML" | grep -oE '/assets/[^"\x27]+\.css' | head -n1 || true)"
             JS_PATH="$(printf "%s" "$UI_HTML" | grep -oE '/assets/[^"\x27]+\.js' | head -n1 || true)"
             if [ -z "$CSS_PATH" ] || [ -z "$JS_PATH" ]; then
@@ -330,8 +351,8 @@ jobs:
               echo "$UI_HTML" | head -n 80 || true
               exit 1
             fi
-            CSS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c "wget -S -O /dev/null http://printscript-ui:80$CSS_PATH" 2>&1 || true)"
-            JS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c "wget -S -O /dev/null http://printscript-ui:80$JS_PATH" 2>&1 || true)"
+            CSS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T "$PROXY_SERVICE" sh -c "wget -S -O /dev/null http://printscript-ui:80$CSS_PATH" 2>&1 || true)"
+            JS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T "$PROXY_SERVICE" sh -c "wget -S -O /dev/null http://printscript-ui:80$JS_PATH" 2>&1 || true)"
             echo "$CSS_HEADERS" | grep -qiE 'Content-Type:.*text/css' || { echo "::error::UI CSS is not served as text/css"; echo "$CSS_HEADERS"; exit 1; }
             echo "$JS_HEADERS" | grep -qiE 'Content-Type:.*(application|text)/javascript' || { echo "::error::UI JS is not served as javascript"; echo "$JS_HEADERS"; exit 1; }
 

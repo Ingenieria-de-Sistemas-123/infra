@@ -155,7 +155,7 @@ services:
     expose:
       - "80"
 
-  reverse-proxy:
+  reverse-proxy-dev:
     image: nginx:alpine
     container_name: reverse-proxy-dev
     depends_on:
@@ -178,7 +178,7 @@ services:
     image: certbot/certbot:latest
     container_name: certbot-dev
     depends_on:
-      - reverse-proxy
+      - reverse-proxy-dev
     volumes:
       - certbot_www_dev:/var/www/certbot
       - letsencrypt_dev:/etc/letsencrypt
