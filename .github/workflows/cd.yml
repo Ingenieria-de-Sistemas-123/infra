@@ -269,7 +269,7 @@ jobs:
             echo "[cd] config"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
 
-            if ! compose -p infra-dev -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans; then
+            if ! compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans; then
               echo "::error::docker compose up failed"
               compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps || true
               compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 snippet-service || true
@@ -283,28 +283,27 @@ jobs:
 
             # Reemplazo: función de salud sin literales '...'
             wait_health() {
-              local svc="$1"
-              echo "→ esperando salud: $svc"
+              local name="$1"
+              echo "→ esperando salud: $name"
               for i in $(seq 1 40); do
-                status="$(docker inspect -f '{{ .State.Health.Status }}' "$svc" 2>/dev/null || echo starting)"
+                status="$(docker inspect -f '{{ .State.Health.Status }}' "$name" 2>/dev/null || echo starting)"
                 if [ "$status" = "healthy" ]; then
-                  echo "✓ $svc healthy"
+                  echo "✓ $name healthy"
                   return 0
                 fi
                 sleep 2
               done
-              echo "::error::$svc no alcanzó estado healthy"
+              echo "::error::$name no alcanzó estado healthy"
               echo "[cd] logs $name (tail 200)"
-              docker logs --tail 200 "$svc" || true
+              docker logs --tail 200 "$name" || true
               return 1
             }
 
-            wait_health_service permission-db
-            wait_health_service snippet-db
-            wait_health_service redis
-            wait_health_service permission-service
-            wait_health_service snippet-service
-            wait_health_service language-service
+            wait_health permission-db
+            wait_health snippet-db
+            wait_health permission-service
+            wait_health snippet-service
+            wait_health language-service
 
             echo "[cd] restart reverse-proxy (refresh upstream DNS)"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart reverse-proxy
