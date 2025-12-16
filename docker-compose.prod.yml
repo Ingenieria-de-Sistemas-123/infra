@@ -68,10 +68,12 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD_SNIPPET}
       LANGUAGE_BASE_URL: ${LANGUAGE_BASE_URL}
       ASSET_SERVICE_BASE_URL: ${ASSET_SERVICE_BASE_URL}
-      NEW_RELIC_APP_NAME: 'SnippetSearcher-Backend'
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
       NEW_RELIC_CONFIG_FILE: /newrelic/newrelic.yml
-      JAVA_TOOL_OPTIONS: "-javaagent:/newrelic/newrelic.jar"
+      ENVIRONMENT: ${ENVIRONMENT}
+      JAVA_TOOL_OPTIONS: >
+        -javaagent:/newrelic/newrelic.jar
+        -Dnewrelic.config.app_name=SnippetSearcher-Backend-Prod
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST}
@@ -121,11 +123,14 @@ services:
     env_file: [.env.prod]
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      NEW_RELIC_APP_NAME: 'SnippetSearcher-Language'
+      ENVIRONMENT: ${ENVIRONMENT}
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
       NEW_RELIC_CONFIG_FILE: /newrelic/newrelic.yml
-      JAVA_TOOL_OPTIONS: "-javaagent:/newrelic/newrelic.jar"
+      JAVA_TOOL_OPTIONS: >
+        -javaagent:/newrelic/newrelic.jar
+        -Dnewrelic.config.app_name=SnippetSearcher-Language-Prod
       NEW_RELIC_LABELS: "environment:${ENVIRONMENT};service:language-service;platform:snippet-searcher"
+
     volumes:
       - ./newrelic:/newrelic:ro
     expose: ["8080"]
@@ -157,10 +162,12 @@ services:
         SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD_PERMISSIONDB}
         SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI}
         AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
-        NEW_RELIC_APP_NAME: 'SnippetSearcher-Permission'
+        ENVIRONMENT: ${ENVIRONMENT}
         NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
         NEW_RELIC_CONFIG_FILE: /newrelic/newrelic.yml
-        JAVA_TOOL_OPTIONS: "-javaagent:/newrelic/newrelic.jar"
+        JAVA_TOOL_OPTIONS: >
+          -javaagent:/newrelic/newrelic.jar
+          -Dnewrelic.config.app_name=SnippetSearcher-Permission-Prod
         NEW_RELIC_LABELS: "environment:${ENVIRONMENT};service:permission-service;platform:snippet-searcher"
       volumes:
         - ./newrelic:/newrelic:ro
@@ -172,8 +179,8 @@ services:
         test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
         interval: 5s
         timeout: 3s
-        retries: 30
-        start_period: 15s
+        retries: 60
+        start_period: 190s
       restart: unless-stopped
       networks: [ss-prod]
 

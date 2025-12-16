@@ -388,15 +388,15 @@ common: &default_settings
 
 development:
   <<: *default_settings
-  app_name: 'snippet-searcher (Development)'
+  app_name:
 
 test:
   <<: *default_settings
-  app_name: 'snippet-searcher (Test)'
+  app_name:
 
 production:
   <<: *default_settings
 
 staging:
   <<: *default_settings
-  app_name: 'snippet-searcher (Staging)'
+  app_name:
