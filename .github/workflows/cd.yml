@@ -281,7 +281,7 @@ jobs:
               exit 1
             fi
 
-            # Reemplazo: función de salud sin literales '...'
+            # Función de salud y alias para compatibilidad
             wait_health() {
               local svc="$1"
               echo "→ esperando salud: $svc"
@@ -294,17 +294,19 @@ jobs:
                 sleep 2
               done
               echo "::error::$svc no alcanzó estado healthy"
-              echo "[cd] logs $name (tail 200)"
+              echo "[cd] logs $svc (tail 200)"
               docker logs --tail 200 "$svc" || true
               return 1
             }
+            wait_health_service() { wait_health "$1"; }
 
-            wait_health_service permission-db
-            wait_health_service snippet-db
-            wait_health_service redis
-            wait_health_service permission-service
-            wait_health_service snippet-service
-            wait_health_service language-service
+            # Usar la función correcta
+            wait_health permission-db
+            wait_health snippet-db
+            wait_health redis
+            wait_health permission-service
+            wait_health snippet-service
+            wait_health language-service
 
             echo "[cd] restart reverse-proxy (refresh upstream DNS)"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart reverse-proxy
@@ -323,15 +325,15 @@ jobs:
 
             echo "[cd] verify UI assets are served (not HTML)"
             UI_HTML="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c 'wget -qO- http://printscript-ui:80/' || true)"
-            CSS_PATH="$(printf "%s" "$UI_HTML" | grep -oE '/assets/[^\"\\x27]+\\.css' | head -n1 || true)"
-            JS_PATH="$(printf "%s" "$UI_HTML" | grep -oE '/assets/[^\"\\x27]+\\.js' | head -n1 || true)"
+            CSS_PATH="$(printf "%s" "$UI_HTML" | grep -oE '/assets/[^"\x27]+\.css' | head -n1 || true)"
+            JS_PATH="$(printf "%s" "$UI_HTML" | grep -oE '/assets/[^"\x27]+\.js' | head -n1 || true)"
             if [ -z "$CSS_PATH" ] || [ -z "$JS_PATH" ]; then
               echo "::error::could not detect UI asset paths in HTML"
               echo "$UI_HTML" | head -n 80 || true
               exit 1
             fi
-            CSS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c \"wget -S -O /dev/null http://printscript-ui:80$CSS_PATH\" 2>&1 || true)"
-            JS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c \"wget -S -O /dev/null http://printscript-ui:80$JS_PATH\" 2>&1 || true)"
+            CSS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c "wget -S -O /dev/null http://printscript-ui:80$CSS_PATH" 2>&1 || true)"
+            JS_HEADERS="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c "wget -S -O /dev/null http://printscript-ui:80$JS_PATH" 2>&1 || true)"
             echo "$CSS_HEADERS" | grep -qiE 'Content-Type:.*text/css' || { echo "::error::UI CSS is not served as text/css"; echo "$CSS_HEADERS"; exit 1; }
             echo "$JS_HEADERS" | grep -qiE 'Content-Type:.*(application|text)/javascript' || { echo "::error::UI JS is not served as javascript"; echo "$JS_HEADERS"; exit 1; }
 
