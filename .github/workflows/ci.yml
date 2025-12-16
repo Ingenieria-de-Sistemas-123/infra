@@ -132,10 +132,10 @@ jobs:
             echo "::error::$name no alcanzó estado healthy"
             return 1
           }
-          wait_health permission-db-dev
-          wait_health permission-service-dev
-          wait_health snippet-service-dev
-          wait_health language-service-dev
+          wait_health permission-db
+          wait_health permission-service
+          wait_health snippet-service
+          wait_health language-service
 
       - name: Mostrar estado (sin secretos)
         run: docker compose -f "$COMPOSE_FILE" --env-file .env.ci.dev ps
