@@ -18,7 +18,7 @@ services:
       - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
       - NEW_RELIC_LABELS=env:${ENVIRONMENT:-dev};service:permission-service;platform:snippet-searcher
       - NEW_RELIC_CONFIG_FILE=/newrelic/newrelic.yml
-      - JAVA_TOOL_OPTIONS=-javaagent:/newrelic/newrelic.jar
+      - JAVA_TOOL_OPTIONS=${NEW_RELIC_JAVA_TOOL_OPTIONS--javaagent:/newrelic/newrelic.jar}
     volumes:
       - ./newrelic:/newrelic:ro
     depends_on:
@@ -30,6 +30,8 @@ services:
       timeout: 3s
       retries: 30
       start_period: 15s
+    entrypoint: ["java"]
+    command: ["-jar", "/app/app.jar"]
 
 #PERMISSION DATABASE
   permission-db:
@@ -68,7 +70,7 @@ services:
       - NEW_RELIC_APP_NAME=SnippetSearcher-Backend
       - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
       - NEW_RELIC_CONFIG_FILE=/newrelic/newrelic.yml
-      - JAVA_TOOL_OPTIONS=-javaagent:/newrelic/newrelic.jar
+      - JAVA_TOOL_OPTIONS=${NEW_RELIC_JAVA_TOOL_OPTIONS--javaagent:/newrelic/newrelic.jar}
       - NEW_RELIC_LABELS=env:${ENVIRONMENT:-dev};service:snippet-service;platform:snippet-searcher
 
     volumes:
@@ -91,6 +93,9 @@ services:
     expose: ["8080"]
     environment:
       AZURE_HOST: ${ASSET_SERVICE_AZURE_HOST}
+      NEW_RELIC_APP_NAME: ${ASSET_SERVICE_NEW_RELIC_APP_NAME:-SnippetSearcher-Asset}
+      NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
+      NEW_RELIC_AGENT_ENABLED: ${ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED:-true}
     depends_on:
       azurite:
         condition: service_started
@@ -139,7 +144,7 @@ services:
       - NEW_RELIC_APP_NAME=SnippetSearcher-Language
       - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
       - NEW_RELIC_CONFIG_FILE=/newrelic/newrelic.yml
-      - JAVA_TOOL_OPTIONS=-javaagent:/newrelic/newrelic.jar
+      - JAVA_TOOL_OPTIONS=${NEW_RELIC_JAVA_TOOL_OPTIONS--javaagent:/newrelic/newrelic.jar}
       - NEW_RELIC_LABELS=env:${ENVIRONMENT:-dev};service:language-service;platform:snippet-searcher
     volumes:
       - ./newrelic:/newrelic:ro
@@ -149,6 +154,8 @@ services:
       timeout: 3s
       retries: 30
       start_period: 15s
+    entrypoint: ["java"]
+    command: ["-jar", "/app/spring-boot-application.jar"]
 
   printscript-ui:
     platform: linux/amd64
@@ -158,7 +165,7 @@ services:
     expose:
       - "80"
 
-  reverse-proxy:
+  reverse-proxy-dev:
     image: nginx:alpine
     container_name: reverse-proxy-dev
     depends_on:
@@ -182,7 +189,7 @@ services:
     image: certbot/certbot:latest
     container_name: certbot-dev
     depends_on:
-      - reverse-proxy
+      - reverse-proxy-dev
     volumes:
       - certbot_www_dev:/var/www/certbot
       - letsencrypt_dev:/etc/letsencrypt
