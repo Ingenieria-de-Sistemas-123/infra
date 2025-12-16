@@ -3,7 +3,7 @@ name: ss-infra-prod
 services:
   snippet-db:
     image: postgres:16-alpine
-    container_name: snippet-db
+    container_name: snippet-db-prod
     env_file: [.env.prod]
     environment:
       POSTGRES_DB: ${DB_SNIPPET_NAME}
@@ -22,7 +22,7 @@ services:
 
   redis:
     image: redis:7
-    container_name: redis
+    container_name: redis-prod
     restart: always
     expose: ["6379"]
     healthcheck:
@@ -35,7 +35,7 @@ services:
 
   permission-db:
     image: postgres:16
-    container_name: permission-db
+    container_name: permission-db-prod
     env_file: [.env.prod]
     environment:
       POSTGRES_DB: ${DB_PERMISSION_NAME}
@@ -46,15 +46,15 @@ services:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
       interval: 5s
       timeout: 3s
-      retries: 30
-      start_period: 10s
+      retries: 60
+      start_period: 180s
     volumes:
       - permission_pg_data_prod:/var/lib/postgresql/data
     networks: [ss-prod]
 
   snippet-service:
     image: ghcr.io/ingenieria-de-sistemas-123/snippet-service:latest
-    container_name: snippet-service
+    container_name: snippet-service-prod
     depends_on:
       snippet-db:
         condition: service_healthy
@@ -68,15 +68,18 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD_SNIPPET}
       LANGUAGE_BASE_URL: ${LANGUAGE_BASE_URL}
       ASSET_SERVICE_BASE_URL: ${ASSET_SERVICE_BASE_URL}
-      NEW_RELIC_APP_NAME: 'SnippetSearcher-Backend'
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
       NEW_RELIC_CONFIG_FILE: /newrelic/newrelic.yml
-      JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
+      ENVIRONMENT: ${ENVIRONMENT}
+      JAVA_TOOL_OPTIONS: >
+        -javaagent:/newrelic/newrelic.jar
+        -Dnewrelic.config.app_name=SnippetSearcher-Backend-Prod
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST}
       SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT}
       SPRING_DATA_REDIS_URL: ${SPRING_DATA_REDIS_URL}
+      NEW_RELIC_LABELS: "environment:${ENVIRONMENT};service:snippet-service;platform:snippet-searcher"
     volumes:
       - ./newrelic:/newrelic:ro
     expose: ["8080"]
@@ -91,12 +94,10 @@ services:
 
   asset-service:
     image: ghcr.io/austral-ingsis/snippet-asset-service:latest
-    container_name: asset-service
+    container_name: asset-service-prod
     env_file: [.env.prod]
     environment:
       AZURE_HOST: ${ASSET_SERVICE_AZURE_HOST}
-      NEW_RELIC_APP_NAME: ${ASSET_SERVICE_NEW_RELIC_APP_NAME}
-      NEW_RELIC_AGENT_ENABLED: ${ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED}
     expose: ["8080"]
     depends_on:
       azurite:
@@ -105,7 +106,7 @@ services:
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite
-    container_name: azurite
+    container_name: azurite-prod
     hostname: azurite
     restart: always
     ports:
@@ -118,14 +119,18 @@ services:
 
   language-service:
     image: ghcr.io/ingenieria-de-sistemas-123/language-service:latest
-    container_name: language-service
+    container_name: language-service-prod
     env_file: [.env.prod]
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      NEW_RELIC_APP_NAME: 'SnippetSearcher-Language'
+      ENVIRONMENT: ${ENVIRONMENT}
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
       NEW_RELIC_CONFIG_FILE: /newrelic/newrelic.yml
-      JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
+      JAVA_TOOL_OPTIONS: >
+        -javaagent:/newrelic/newrelic.jar
+        -Dnewrelic.config.app_name=SnippetSearcher-Language-Prod
+      NEW_RELIC_LABELS: "environment:${ENVIRONMENT};service:language-service;platform:snippet-searcher"
+
     volumes:
       - ./newrelic:/newrelic:ro
     expose: ["8080"]
@@ -139,7 +144,7 @@ services:
     networks: [ss-prod]
 
   printscript-ui:
-    container_name: printscript-ui
+    container_name: printscript-ui-prod
     image: ghcr.io/ingenieria-de-sistemas-123/printscript-ui:latest
     env_file: [.env.prod]
     expose: ["80"]
@@ -148,7 +153,7 @@ services:
 
   permission-service:
       image: ghcr.io/ingenieria-de-sistemas-123/permission-service:latest
-      container_name: permission-service
+      container_name: permission-service-prod
       env_file: [.env.prod]
       environment:
         SPRING_PROFILES_ACTIVE: docker
@@ -157,10 +162,13 @@ services:
         SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD_PERMISSIONDB}
         SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI}
         AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
-        NEW_RELIC_APP_NAME: 'SnippetSearcher-Permission'
+        ENVIRONMENT: ${ENVIRONMENT}
         NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
         NEW_RELIC_CONFIG_FILE: /newrelic/newrelic.yml
-        JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
+        JAVA_TOOL_OPTIONS: >
+          -javaagent:/newrelic/newrelic.jar
+          -Dnewrelic.config.app_name=SnippetSearcher-Permission-Prod
+        NEW_RELIC_LABELS: "environment:${ENVIRONMENT};service:permission-service;platform:snippet-searcher"
       volumes:
         - ./newrelic:/newrelic:ro
       depends_on:
@@ -171,14 +179,14 @@ services:
         test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
         interval: 5s
         timeout: 3s
-        retries: 30
-        start_period: 15s
+        retries: 60
+        start_period: 190s
       restart: unless-stopped
       networks: [ss-prod]
 
   reverse-proxy:
     image: nginx:alpine
-    container_name: reverse-proxy
+    container_name: reverse-proxy-prod
     depends_on:
       snippet-service:
         condition: service_healthy
@@ -200,7 +208,7 @@ services:
 
   certbot:
     image: certbot/certbot:latest
-    container_name: certbot
+    container_name: certbot-prod
     depends_on:
       - reverse-proxy
     volumes:
