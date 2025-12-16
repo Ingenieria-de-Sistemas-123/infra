@@ -18,6 +18,8 @@ services:
       - JAVA_TOOL_OPTIONS=${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
     volumes:
       - ./newrelic:/newrelic:ro
+    # Ejecutar Java directamente y permitir que JAVA_TOOL_OPTIONS inyecte el agente si corresponde
+    entrypoint: ["sh", "-c", "java $JAVA_TOOL_OPTIONS -jar /app/app.jar"]
     depends_on:
       permission-db:
         condition: service_healthy
@@ -137,6 +139,8 @@ services:
       - JAVA_TOOL_OPTIONS=${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
     volumes:
       - ./newrelic:/newrelic:ro
+      # Su Dockerfile usa -javaagent:/app/newrelic.jar; proveer el jar en esa ruta
+      - ./newrelic/newrelic.jar:/app/newrelic.jar:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
       interval: 5s
