@@ -46,8 +46,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
       interval: 5s
       timeout: 3s
-      retries: 30
-      start_period: 10s
+      retries: 60
+      start_period: 180s
     volumes:
       - permission_pg_data_prod:/var/lib/postgresql/data
     networks: [ss-prod]
