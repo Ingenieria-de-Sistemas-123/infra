@@ -71,6 +71,7 @@ services:
       NEW_RELIC_APP_NAME: 'SnippetSearcher-Backend'
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
       NEW_RELIC_CONFIG_FILE: /newrelic/newrelic.yml
+      NEW_RELIC_LOG: stdout
       JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
@@ -125,6 +126,7 @@ services:
       NEW_RELIC_APP_NAME: 'SnippetSearcher-Language'
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
       NEW_RELIC_CONFIG_FILE: /newrelic/newrelic.yml
+      NEW_RELIC_LOG: stdout
       JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
     volumes:
       - ./newrelic:/newrelic:ro
@@ -160,6 +162,7 @@ services:
         NEW_RELIC_APP_NAME: 'SnippetSearcher-Permission'
         NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
         NEW_RELIC_CONFIG_FILE: /newrelic/newrelic.yml
+        NEW_RELIC_LOG: stdout
         JAVA_TOOL_OPTIONS: ${NEW_RELIC_JAVA_TOOL_OPTIONS:-}
       volumes:
         - ./newrelic:/newrelic:ro
