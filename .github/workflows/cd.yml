@@ -269,7 +269,7 @@ jobs:
             echo "[cd] config"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
 
-            if ! compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans; then
+            if ! compose -p infra-dev -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans; then
               echo "::error::docker compose up failed"
               compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps || true
               compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 snippet-service || true
