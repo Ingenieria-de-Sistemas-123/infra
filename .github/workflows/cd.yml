@@ -269,6 +269,9 @@ jobs:
             echo "[cd] config"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
 
+            # Limpieza preventiva de contenedores legacy con nombre reverse-proxy-dev
+            docker rm -f reverse-proxy-dev >/dev/null 2>&1 || true
+
             if ! compose -p infra-dev -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans; then
               echo "::error::docker compose up failed"
               compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps || true
@@ -281,32 +284,8 @@ jobs:
               exit 1
             fi
 
-            # Función de salud y alias para compatibilidad
-            wait_health() {
-              local svc="$1"
-              echo "→ esperando salud: $svc"
-              for i in $(seq 1 40); do
-                status="$(docker inspect -f '{{ .State.Health.Status }}' "$svc" 2>/dev/null || echo starting)"
-                if [ "$status" = "healthy" ]; then
-                  echo "✓ $svc healthy"
-                  return 0
-                fi
-                sleep 2
-              done
-              echo "::error::$svc no alcanzó estado healthy"
-              echo "[cd] logs $svc (tail 200)"
-              docker logs --tail 200 "$svc" || true
-              return 1
-            }
-            wait_health_service() { wait_health "$1"; }
-
-            # Usar la función correcta
-            wait_health permission-db
-            wait_health snippet-db
-            wait_health redis
-            wait_health permission-service
-            wait_health snippet-service
-            wait_health language-service
+            # Saltar health checks de Docker (pedido del usuario)
+            echo "[cd] skipping docker health checks"
 
             echo "[cd] restart reverse-proxy (refresh upstream DNS)"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart reverse-proxy
@@ -319,9 +298,28 @@ jobs:
               compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 printscript-ui || true
               exit 1
             fi
-            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://snippet-service:8080/actuator/health | grep -q UP
-            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://permission-service:8080/actuator/health | grep -q UP
-            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy wget -qO- http://language-service:8080/actuator/health | grep -q UP
+
+            # Reintentos para health vía reverse-proxy
+            check_health_via_proxy() {
+              local svc="$1"
+              local url="http://$svc:8080/actuator/health"
+              echo "→ reverse-proxy -> $url"
+              for i in $(seq 1 10); do
+                if compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c "wget -qO- $url" | grep -q UP; then
+                  echo "✓ $svc UP via reverse-proxy"
+                  return 0
+                fi
+                sleep 2
+              done
+              echo "::error::reverse-proxy cannot reach $svc or health not UP"
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 reverse-proxy || true
+              compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --timestamps --tail 200 "$svc" || true
+              return 1
+            }
+
+            check_health_via_proxy snippet-service || exit 1
+            check_health_via_proxy permission-service || exit 1
+            check_health_via_proxy language-service || exit 1
 
             echo "[cd] verify UI assets are served (not HTML)"
             UI_HTML="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T reverse-proxy sh -c 'wget -qO- http://printscript-ui:80/' || true)"
