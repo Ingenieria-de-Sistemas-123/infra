@@ -269,8 +269,10 @@ jobs:
             echo "[cd] config"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
 
-            # Limpieza preventiva de contenedores legacy con nombre reverse-proxy-dev
-            docker rm -f reverse-proxy-dev >/dev/null 2>&1 || true
+            # Limpieza preventiva de contenedores residuales (evita conflictos de nombre)
+            for service in printscript-ui reverse-proxy-dev snippet-service permission-service language-service; do
+              docker rm -f "$service" 2>/dev/null || true
+            done
 
             if ! compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans; then
               echo "::error::docker compose up failed"
