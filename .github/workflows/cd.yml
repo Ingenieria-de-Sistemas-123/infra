@@ -18,6 +18,7 @@ jobs:
       DEPLOY_SSH_KEY_MATERIAL: ${{ github.ref_name == 'main' && secrets.DEPLOY_SSH_KEY_PROD || secrets.DEPLOY_SSH_KEY }}
       DEPLOY_WORKDIR_PATH: ${{ github.ref_name == 'main' && secrets.DEPLOY_WORKDIR_PROD || secrets.DEPLOY_WORKDIR }}
       DUCKDNS_DOMAIN: ${{ github.ref_name == 'main' && 'snippet-org-prod.duckdns.org' || 'snippet-org-dev.duckdns.org' }}
+
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -35,7 +36,21 @@ jobs:
             cd "${{ env.DEPLOY_WORKDIR_PATH }}"
 
             BRANCH='${{ github.ref_name }}'
-            if [ "$BRANCH" = "main" ]; then COMPOSE_FILE="docker-compose.prod.yml"; ENV_FILE=".env.prod"; PROJECT_NAME="infra-prod"; PROXY_SERVICE="reverse-proxy"; else COMPOSE_FILE="docker-compose.dev.yml"; ENV_FILE=".env.dev"; PROJECT_NAME="infra-dev"; PROXY_SERVICE="reverse-proxy-dev"; fi
+            if [ "$BRANCH" = "main" ]; then
+              COMPOSE_FILE="docker-compose.prod.yml"
+              ENV_FILE=".env.prod"
+              PROJECT_NAME="infra-prod"
+              PROXY_SERVICE="reverse-proxy"
+              CERTBOT_CONTAINER="certbot"
+              CLEAN_CONTAINERS=(certbot reverse-proxy printscript-ui snippet-service permission-service language-service snippet-db permission-db redis asset-service azurite)
+            else
+              COMPOSE_FILE="docker-compose.dev.yml"
+              ENV_FILE=".env.dev"
+              PROJECT_NAME="infra-dev"
+              PROXY_SERVICE="reverse-proxy-dev"
+              CERTBOT_CONTAINER="certbot-dev"
+              CLEAN_CONTAINERS=(certbot-dev reverse-proxy-dev printscript-ui snippet-service permission-service language-service snippet-db permission-db redis asset-service azurite)
+            fi
 
             echo "[cd] duckdns domain: ${{ env.DUCKDNS_DOMAIN }}"
 
@@ -129,7 +144,6 @@ jobs:
               fi
             fi
             echo "ASSET_SERVICE_AZURE_HOST=${ASSET_SERVICE_AZURE_HOST}" >> "$ENV_FILE"
-
             echo "ASSET_SERVICE_NEW_RELIC_APP_NAME=${{ secrets.ASSET_SERVICE_NEW_RELIC_APP_NAME }}" >> "$ENV_FILE"
             echo "ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED=${{ secrets.ASSET_SERVICE_NEW_RELIC_AGENT_ENABLED }}" >> "$ENV_FILE"
 
@@ -193,9 +207,7 @@ jobs:
               exit 1
             fi
 
-            compose() {
-              "${COMPOSE_BIN[@]}" -p "$PROJECT_NAME" "$@"
-            }
+            compose() { "${COMPOSE_BIN[@]}" -p "$PROJECT_NAME" "$@"; }
 
             echo "[cd] pull images"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
@@ -208,7 +220,6 @@ jobs:
 
             if [ -n "$NEW_RELIC_LICENSE_KEY" ]; then
               mkdir -p "$NR_DIR"
-
               if [ ! -f "$NR_JAR_FILE" ]; then
                 echo "[cd] download New Relic Java agent"
                 NR_ZIP_URL="https://download.newrelic.com/newrelic/java-agent/newrelic-agent/current/newrelic-java.zip"
@@ -238,7 +249,6 @@ jobs:
                     echo "::warning::New Relic zip extracted but newrelic/newrelic.jar not found"
                   fi
                 fi
-
                 rm -rf "$tmp" || true
               fi
 
@@ -269,9 +279,14 @@ jobs:
             echo "[cd] config"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config
 
-            # Limpieza preventiva de contenedores residuales (evita conflictos de nombre)
-            for service in printscript-ui reverse-proxy-dev snippet-service permission-service language-service; do
-              docker rm -f "$service" 2>/dev/null || true
+            # 1) Bajar stack del project actual (si existía)
+            echo "[cd] down (best effort)"
+            compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down --remove-orphans || true
+
+            # 2) Limpieza por nombres fijos (tu caso: certbot-dev)
+            echo "[cd] cleanup fixed container names (avoid name conflicts)"
+            for c in "${CLEAN_CONTAINERS[@]}"; do
+              docker rm -f "$c" 2>/dev/null || true
             done
 
             if ! compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans; then
@@ -286,13 +301,11 @@ jobs:
               exit 1
             fi
 
-            # Saltar health checks de Docker (pedido del usuario)
             echo "[cd] skipping docker health checks"
 
             echo "[cd] restart reverse-proxy (refresh upstream DNS)"
             compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart "$PROXY_SERVICE"
 
-            # Esperar a que el contenedor de reverse-proxy esté en ejecución tras el restart
             echo "[cd] wait $PROXY_SERVICE running"
             for i in $(seq 1 30); do
               cid="$(compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps -q "$PROXY_SERVICE" || true)"
@@ -322,7 +335,6 @@ jobs:
               exit 1
             fi
 
-            # Reintentos para health vía reverse-proxy
             check_health_via_proxy() {
               local svc="$1"
               local url="http://$svc:8080/actuator/health"
